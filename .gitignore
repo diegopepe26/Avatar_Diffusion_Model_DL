@@ -5,3 +5,5 @@ data/
 # Python
 __pycache__/
 *.pyc
+
+.superpowers
