@@ -1,0 +1,7 @@
+# Data stays on each computer: raw download and generated files
+dataset/
+data/
+
+# Python
+__pycache__/
+*.pyc
