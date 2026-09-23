@@ -161,7 +161,7 @@ class DatasetSplitter:
         for attr, groups in self.config.MAPPING.items():
             summary['train_attributes'][attr] = {word: int((train[attr] == word).sum()) for word in groups}
 
-        # e.g. 'dark (face_color) with hair': {'balding': 149, 'short': 928, 'medium': 445, 'long': 0}
+        # e.g. 'dark (face_color) with hair': {'balding': 101, 'short': 652, 'medium': 311, 'long': 0}
         for pair in self.ood_pairs:
             for attr, word in pair.items():
                 rows = train[train[attr] == word]
