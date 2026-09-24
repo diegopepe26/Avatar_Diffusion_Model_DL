@@ -1,4 +1,4 @@
-"""All the settings of the project in one place: paths, captions, split, images, vocabulary, text encoder."""
+"""All the settings of the project in one place: paths, captions, split, images, vocabulary, models."""
 
 from pathlib import Path
 
@@ -78,6 +78,9 @@ class Config:
     FFN_DIM = 4 * D_MODEL     # hidden size of the feed-forward (two linear layers)
     DROPOUT = 0.1
     ATTENTION = 'scratch'     # 'scratch' (our MultiHeadAttention) or 'torch' (nn.MultiheadAttention)
+
+    # ---- Diffusion ----
+    NUM_TIMESTEPS = 1000      # T: noise steps, t = 0 (almost clean) ... T - 1 (pure noise)
 
     def to_dict(self):
         """Collect the settings that decide the data, to save them next to it.
