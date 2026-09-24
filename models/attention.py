@@ -24,10 +24,11 @@ class MultiHeadAttention(nn.Module):
             raise ValueError(f'd_model ({d_model}) must be divisible by num_heads ({num_heads})')
         self.num_heads = num_heads
         self.head_dim = d_model // num_heads
-        self.q = nn.Linear(d_model, d_model)
-        self.k = nn.Linear(d_model, d_model)
-        self.v = nn.Linear(d_model, d_model)
-        self.out = nn.Linear(d_model, d_model)
+        # the weight matrices W_Q, W_K, W_V and W_O of the paper (each Linear also adds a bias)
+        self.w_q = nn.Linear(d_model, d_model)
+        self.w_k = nn.Linear(d_model, d_model)
+        self.w_v = nn.Linear(d_model, d_model)
+        self.w_o = nn.Linear(d_model, d_model)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, query, key, value, key_padding_mask=None):
@@ -44,10 +45,11 @@ class MultiHeadAttention(nn.Module):
         """
         batch, query_length, d_model = query.shape
         key_length = key.shape[1]
+        # q, k, v: the queries, keys and values, i.e. the embeddings multiplied by W_Q, W_K, W_V.
         # (B, L, D) -> (B, L, heads, head_dim) -> (B, heads, L, head_dim): each head gets its own slice
-        q = self.q(query).view(batch, query_length, self.num_heads, self.head_dim).transpose(1, 2)
-        k = self.k(key).view(batch, key_length, self.num_heads, self.head_dim).transpose(1, 2)
-        v = self.v(value).view(batch, key_length, self.num_heads, self.head_dim).transpose(1, 2)
+        q = self.w_q(query).view(batch, query_length, self.num_heads, self.head_dim).transpose(1, 2)
+        k = self.w_k(key).view(batch, key_length, self.num_heads, self.head_dim).transpose(1, 2)
+        v = self.w_v(value).view(batch, key_length, self.num_heads, self.head_dim).transpose(1, 2)
 
         # how much each query matches each key; / sqrt(head_dim) keeps the softmax from saturating
         scores = q @ k.transpose(-2, -1) / math.sqrt(self.head_dim)    # (B, heads, L_q, L_k)
@@ -60,7 +62,7 @@ class MultiHeadAttention(nn.Module):
 
         # back to (B, L_q, D): the heads side by side
         output = output.transpose(1, 2).reshape(batch, query_length, d_model)
-        return self.out(output), weights.mean(dim=1)
+        return self.w_o(output), weights.mean(dim=1)
 
 
 def build_attention(config):

@@ -46,10 +46,10 @@ def test_attention_matches_pytorch():
     theirs = nn.MultiheadAttention(16, 4, dropout=0.1, batch_first=True)
     # same weights in both: PyTorch keeps q, k and v stacked in one matrix
     with torch.no_grad():
-        theirs.in_proj_weight.copy_(torch.cat([ours.q.weight, ours.k.weight, ours.v.weight]))
-        theirs.in_proj_bias.copy_(torch.cat([ours.q.bias, ours.k.bias, ours.v.bias]))
-        theirs.out_proj.weight.copy_(ours.out.weight)
-        theirs.out_proj.bias.copy_(ours.out.bias)
+        theirs.in_proj_weight.copy_(torch.cat([ours.w_q.weight, ours.w_k.weight, ours.w_v.weight]))
+        theirs.in_proj_bias.copy_(torch.cat([ours.w_q.bias, ours.w_k.bias, ours.w_v.bias]))
+        theirs.out_proj.weight.copy_(ours.w_o.weight)
+        theirs.out_proj.bias.copy_(ours.w_o.bias)
     ours.eval()     # no dropout: the two must give the same numbers
     theirs.eval()
 

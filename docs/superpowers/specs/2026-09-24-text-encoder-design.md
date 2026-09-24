@@ -68,14 +68,14 @@ Notazione: B = batch, L = `max_length` (18), D = `D_MODEL`, H = `NUM_HEADS`, d_k
 Implementazione da zero con la **stessa interfaccia di `nn.MultiheadAttention(..., batch_first=True)`**,
 così le due sono intercambiabili.
 
-- `__init__`: quattro `nn.Linear(d_model, d_model)` (q, k, v, out) e un `nn.Dropout`;
+- `__init__`: quattro `nn.Linear(d_model, d_model)` (`w_q`, `w_k`, `w_v`, `w_o`: le matrici W_Q, W_K, W_V, W_O) e un `nn.Dropout`;
   `ValueError` se `d_model % num_heads != 0`.
 - `forward(query, key, value, key_padding_mask=None)`:
   1. Q, K, V: `(B, L, D)` → divisi in head → `(B, H, L, d_k)`
   2. `scores = Q @ Kᵀ / √d_k` → `(B, H, L_q, L_k)`
   3. colonne dei `<pad>` a `-inf` (`key_padding_mask` `(B, L_k)`, `True` = da ignorare, come in PyTorch)
   4. `weights = softmax(scores)`, poi dropout sui pesi (come fa `nn.MultiheadAttention`)
-  5. `out = weights @ V` → head riunite → `(B, L_q, D)` → Linear out
+  5. `out = weights @ V` → head riunite → `(B, L_q, D)` → `w_o`
   6. `return out, weights.mean(dim=1)`: pesi mediati sulle head `(B, L_q, L_k)`, come PyTorch
 
 ### `build_attention(config)` (`models/attention.py`)
@@ -138,8 +138,8 @@ La caption i-esima condiziona l'immagine i-esima; in generazione B è il numero 
 Nessun file da `data/`: il vocabolario si costruisce nel test con `Vocabulary.build` su alcune caption.
 
 1. `sinusoidal_embedding`: forma `(N, dim)`; posizione 0 → seno 0 e coseno 1; `dim` dispari → `ValueError`.
-2. Equivalenza: si copiano i pesi di `MultiHeadAttention` (q, k, v → `in_proj_weight`/`in_proj_bias`,
-   out → `out_proj`) in `nn.MultiheadAttention`; in `eval()`, con la stessa maschera di padding, output e
+2. Equivalenza: si copiano i pesi di `MultiHeadAttention` (`w_q`, `w_k`, `w_v` → `in_proj_weight`/`in_proj_bias`,
+   `w_o` → `out_proj`) in `nn.MultiheadAttention`; in `eval()`, con la stessa maschera di padding, output e
    pesi coincidono (`torch.allclose`).
 3. `TextEncoder`, con `ATTENTION = 'scratch'` e `'torch'`: output `(B, 18, D)`, `pad_mask` `True`
    esattamente dove il token è `<pad>`.
