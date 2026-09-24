@@ -104,9 +104,10 @@ def test_text_encoder_trains_every_weight():
 
     context, _ = encoder(tokens)
     (context * torch.randn_like(context)).sum().backward()   # any loss that uses every output
-    assert len(encoder.blocks) == config.NUM_ENCODER_BLOCKS
+    # the weights of the last block are among the parameters (a Python list would hide them)
+    assert f'blocks.{config.NUM_ENCODER_BLOCKS - 1}.feed_forward.0.weight' in dict(encoder.named_parameters())
     for name, parameter in encoder.named_parameters():
         assert parameter.grad is not None, f'{name} is not trained'
     # the positional encoding follows the model (GPU, saved weights) but is not trained
-    assert 'positional' in dict(encoder.named_buffers())
+    assert 'positional' in encoder.state_dict()
     assert 'positional' not in dict(encoder.named_parameters())
