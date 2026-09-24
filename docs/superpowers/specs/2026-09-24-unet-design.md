@@ -107,6 +107,9 @@ return x + attended → (B, C, H, W)                     residuo
 ```
 
 `context` `(B, 18, D_MODEL)` e `pad_mask` `(B, 18)` sono l'uscita del `TextEncoder`.
+Il blocco **non riscrive l'attention**: riusa `MultiHeadAttention` di `attention.py` (tramite
+`build_attention`) e si occupa solo di ciò che serve per le immagini: normalizzare, trasformare i pixel in
+token e poi di nuovo in immagine, sommare il residuo. La docstring lo dice esplicitamente.
 
 ### `UNetBlock(in_channels, out_channels, config, attention)`
 
