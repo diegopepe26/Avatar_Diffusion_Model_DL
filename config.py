@@ -1,10 +1,10 @@
-"""All the settings of the project in one place: paths, captions, split, images, vocabulary."""
+"""All the settings of the project in one place: paths, captions, split, images, vocabulary, text encoder."""
 
 from pathlib import Path
 
 
 class Config:
-    """Settings of the data pipeline. Change them here, never inside the other files."""
+    """Settings of the project. Change them here, never inside the other files."""
 
     # Every path starts from the project folder, so the code works on any computer and on Colab.
     ROOT = Path(__file__).resolve().parent
@@ -70,6 +70,14 @@ class Config:
 
     # ---- Vocabulary ----
     SPECIAL_TOKENS = ['<pad>', '<unk>', '<bos>', '<eos>']   # ids 0, 1, 2, 3
+
+    # ---- Text encoder ----
+    D_MODEL = 128             # size of the embeddings, used by the whole model (64 or 128)
+    NUM_HEADS = 4             # D_MODEL must be divisible by NUM_HEADS
+    NUM_ENCODER_BLOCKS = 2    # 2 for now, 4 if needed
+    FFN_DIM = 4 * D_MODEL     # hidden size of the feed-forward (two linear layers)
+    DROPOUT = 0.1
+    ATTENTION = 'scratch'     # 'scratch' (our MultiHeadAttention) or 'torch' (nn.MultiheadAttention)
 
     def to_dict(self):
         """Collect the settings that decide the data, to save them next to it.

@@ -2,7 +2,10 @@
 
 import pytest
 import torch
+from torch import nn
 
+from config import Config
+from models.attention import MultiHeadAttention, build_attention
 from models.sinusoidal import sinusoidal_embedding
 
 
@@ -20,3 +23,42 @@ def test_sinusoidal_embedding():
 def test_sinusoidal_embedding_odd_dim():
     with pytest.raises(ValueError):
         sinusoidal_embedding(torch.arange(18), 127)
+
+
+def test_attention_matches_pytorch():
+    torch.manual_seed(0)
+    ours = MultiHeadAttention(d_model=16, num_heads=4, dropout=0.1)
+    theirs = nn.MultiheadAttention(16, 4, dropout=0.1, batch_first=True)
+    # same weights in both: PyTorch keeps q, k and v stacked in one matrix
+    with torch.no_grad():
+        theirs.in_proj_weight.copy_(torch.cat([ours.q.weight, ours.k.weight, ours.v.weight]))
+        theirs.in_proj_bias.copy_(torch.cat([ours.q.bias, ours.k.bias, ours.v.bias]))
+        theirs.out_proj.weight.copy_(ours.out.weight)
+        theirs.out_proj.bias.copy_(ours.out.bias)
+    ours.eval()     # no dropout: the two must give the same numbers
+    theirs.eval()
+
+    x = torch.randn(2, 5, 16)
+    pad_mask = torch.tensor([[False, False, False, False, True],
+                             [False, False, False, True, True]])
+    our_output, our_weights = ours(x, x, x, key_padding_mask=pad_mask)
+    their_output, their_weights = theirs(x, x, x, key_padding_mask=pad_mask)
+    assert torch.allclose(our_output, their_output, atol=1e-5)
+    assert torch.allclose(our_weights, their_weights, atol=1e-5)
+    assert torch.all(our_weights[:, :, 4] == 0)   # nobody looks at a <pad>
+
+
+def test_attention_heads_must_divide_d_model():
+    with pytest.raises(ValueError):
+        MultiHeadAttention(d_model=128, num_heads=3, dropout=0.1)
+
+
+def test_build_attention():
+    config = Config()
+    config.ATTENTION = 'scratch'
+    assert isinstance(build_attention(config), MultiHeadAttention)
+    config.ATTENTION = 'torch'
+    assert isinstance(build_attention(config), nn.MultiheadAttention)
+    config.ATTENTION = 'Scratch'   # a typo must stop, not silently pick one of the two
+    with pytest.raises(ValueError):
+        build_attention(config)
