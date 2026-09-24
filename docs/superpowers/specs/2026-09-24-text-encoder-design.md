@@ -70,7 +70,8 @@ così le due sono intercambiabili.
 
 - `__init__`: quattro `nn.Linear(d_model, d_model)` (`w_q`, `w_k`, `w_v`, `w_o`: le matrici W_Q, W_K, W_V, W_O) e un `nn.Dropout`;
   `ValueError` se `d_model % num_heads != 0`.
-- `forward(query, key, value, key_padding_mask=None)`:
+- `forward(x_q, x_k, x_v, key_padding_mask=None)`: sequenze da cui si calcolano query, key e value
+  (text encoder: tutte e tre `x`, il testo; UNet: `x_q` immagine, `x_k` e `x_v` testo)
   1. Q, K, V: `(B, L, D)` → divisi in head → `(B, H, L, d_k)`
   2. `scores = Q @ Kᵀ / √d_k` → `(B, H, L_q, L_k)`
   3. colonne dei `<pad>` a `-inf` (`key_padding_mask` `(B, L_k)`, `True` = da ignorare, come in PyTorch)

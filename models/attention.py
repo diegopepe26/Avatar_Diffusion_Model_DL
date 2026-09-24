@@ -31,25 +31,29 @@ class MultiHeadAttention(nn.Module):
         self.w_o = nn.Linear(d_model, d_model)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, query, key, value, key_padding_mask=None):
+    def forward(self, x_q, x_k, x_v, key_padding_mask=None):
         """Every query vector collects the value vectors, weighted by how much its key matches.
 
+        x_q, x_k, x_v are the sequences the queries, keys and values are computed from:
+        - text encoder (self-attention): all three are the same x, the text;
+        - UNet (cross-attention): x_q is the image, x_k and x_v are the text.
+
         Args:
-            query: (B, L_q, D). In self-attention query, key and value are the same tensor.
-            key: (B, L_k, D).
-            value: (B, L_k, D).
+            x_q: (B, L_q, D), the sequence the queries come from.
+            x_k: (B, L_k, D), the sequence the keys come from.
+            x_v: (B, L_k, D), the sequence the values come from.
             key_padding_mask: (B, L_k) bool, True where the token is <pad> (ignored); None = no mask.
 
         Returns:
             (output (B, L_q, D), attention weights averaged over the heads (B, L_q, L_k)).
         """
-        batch, query_length, d_model = query.shape
-        key_length = key.shape[1]
-        # q, k, v: the queries, keys and values, i.e. the embeddings multiplied by W_Q, W_K, W_V.
+        batch, query_length, d_model = x_q.shape
+        key_length = x_k.shape[1]
+        # q, k, v: the queries, keys and values, i.e. x_q, x_k, x_v multiplied by W_Q, W_K, W_V.
         # (B, L, D) -> (B, L, heads, head_dim) -> (B, heads, L, head_dim): each head gets its own slice
-        q = self.w_q(query).view(batch, query_length, self.num_heads, self.head_dim).transpose(1, 2)
-        k = self.w_k(key).view(batch, key_length, self.num_heads, self.head_dim).transpose(1, 2)
-        v = self.w_v(value).view(batch, key_length, self.num_heads, self.head_dim).transpose(1, 2)
+        q = self.w_q(x_q).view(batch, query_length, self.num_heads, self.head_dim).transpose(1, 2)
+        k = self.w_k(x_k).view(batch, key_length, self.num_heads, self.head_dim).transpose(1, 2)
+        v = self.w_v(x_v).view(batch, key_length, self.num_heads, self.head_dim).transpose(1, 2)
 
         # how much each query matches each key; / sqrt(head_dim) keeps the softmax from saturating
         scores = q @ k.transpose(-2, -1) / math.sqrt(self.head_dim)    # (B, heads, L_q, L_k)
