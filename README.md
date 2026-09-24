@@ -48,16 +48,32 @@ All the settings are in `config.py`. The results go to `data/` (not in the repos
 | `preprocessing/vocabulary.py` | `Vocabulary`: tokens <-> ids, built from train only |
 | `preprocessing/image_preprocessor.py` | `ImagePreprocessor`: white background, 32x32, normalization to [-1, 1] |
 | `preprocessing/cartoon_dataset.py` | `CartoonDataset`: PyTorch Dataset of one split |
+| `models/sinusoidal.py` | `sinusoidal_embedding`: sine/cosine vectors for token positions (and the UNet time steps) |
+| `models/attention.py` | `MultiHeadAttention` written from scratch; `build_attention` gives it or `nn.MultiheadAttention` (`Config.ATTENTION`) |
+| `models/text_encoder.py` | `EncoderBlock` and `TextEncoder`: caption ids -> one vector per token + `<pad>` mask |
 
 ## Use in training
 
 ```python
 from torch.utils.data import DataLoader
 from config import Config
+from models.text_encoder import TextEncoder
 from preprocessing.cartoon_dataset import CartoonDataset
 
 train = CartoonDataset(Config(), 'train')   # images in [-1, 1], caption ids
 loader = DataLoader(train, batch_size=128, shuffle=True)
+text_encoder = TextEncoder(Config(), train.vocabulary)
+
+for images, tokens in loader:
+    context, pad_mask = text_encoder(tokens)   # (B, 18, D_MODEL), (B, 18): the condition of the UNet
+```
+
+## Tests
+
+From the project folder (they do not need `data/`):
+
+```bash
+python -m pytest tests/
 ```
 
 ## Colab

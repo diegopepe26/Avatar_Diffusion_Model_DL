@@ -7,6 +7,21 @@ from torch import nn
 from config import Config
 from models.attention import MultiHeadAttention, build_attention
 from models.sinusoidal import sinusoidal_embedding
+from models.text_encoder import TextEncoder
+from preprocessing.vocabulary import Vocabulary
+
+# two captions of different length: the second one ends with one <pad>
+CAPTIONS = [
+    'a cartoon avatar with pale skin, long blonde hair, no glasses and a beard',
+    'a cartoon avatar with dark skin, short black hair, sunglasses and no beard',
+]
+
+
+def make_vocabulary(config):
+    """A small vocabulary built from CAPTIONS, so the tests do not need data/."""
+    vocabulary = Vocabulary(config)
+    vocabulary.build(CAPTIONS)
+    return vocabulary
 
 
 def test_sinusoidal_embedding():
@@ -62,3 +77,36 @@ def test_build_attention():
     config.ATTENTION = 'Scratch'   # a typo must stop, not silently pick one of the two
     with pytest.raises(ValueError):
         build_attention(config)
+
+
+@pytest.mark.parametrize('attention', ['scratch', 'torch'])
+def test_text_encoder(attention):
+    config = Config()
+    config.ATTENTION = attention
+    vocabulary = make_vocabulary(config)
+    encoder = TextEncoder(config, vocabulary)
+    tokens = torch.tensor([vocabulary.encode(caption) for caption in CAPTIONS])   # (2, 18)
+
+    context, pad_mask = encoder(tokens)
+    assert context.shape == (2, 18, config.D_MODEL)
+    assert torch.equal(pad_mask, tokens == vocabulary.ids['<pad>'])
+    assert pad_mask[1, -1] and not pad_mask[0].any()   # only the shorter caption has a <pad>
+
+    context, pad_mask = encoder(tokens[:1])   # one prompt alone, as at generation time
+    assert context.shape == (1, 18, config.D_MODEL)
+
+
+def test_text_encoder_trains_every_weight():
+    config = Config()
+    vocabulary = make_vocabulary(config)
+    encoder = TextEncoder(config, vocabulary)
+    tokens = torch.tensor([vocabulary.encode(caption) for caption in CAPTIONS])
+
+    context, _ = encoder(tokens)
+    (context * torch.randn_like(context)).sum().backward()   # any loss that uses every output
+    assert len(encoder.blocks) == config.NUM_ENCODER_BLOCKS
+    for name, parameter in encoder.named_parameters():
+        assert parameter.grad is not None, f'{name} is not trained'
+    # the positional encoding follows the model (GPU, saved weights) but is not trained
+    assert 'positional' in dict(encoder.named_buffers())
+    assert 'positional' not in dict(encoder.named_parameters())
