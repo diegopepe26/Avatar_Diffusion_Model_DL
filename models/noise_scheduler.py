@@ -47,3 +47,36 @@ class NoiseScheduler:
         # and shape it (B, 1, 1, 1), so it applies to all the channels and pixels of that image
         alpha_bar = self.alpha_bars.to(images.device)[t].view(-1, 1, 1, 1)
         return alpha_bar.sqrt() * images + (1 - alpha_bar).sqrt() * noise
+
+    def step(self, x_t, t, predicted_noise, generator=None):
+        """One step back of the generation: from the images at step t to the images at step t - 1.
+
+        DDPM reverse step: estimate the clean image by turning add_noise around, keep it in [-1, 1]
+        (as the official DDPM code does), move towards it with the mean of q(x_(t-1) | x_t, x_0) and
+        add fresh noise with variance beta_tilde ("fixed small" of DDPM). No fresh noise at t = 0.
+
+        Args:
+            x_t: (B, 3, H, W) images at step t.
+            t: integer step, the same for the whole batch (from NUM_TIMESTEPS - 1 down to 0).
+            predicted_noise: (B, 3, H, W) the noise predicted by the model for x_t.
+            generator: torch.Generator of the fresh noise (same seed, same images), or None.
+
+        Returns:
+            (B, 3, H, W) images at step t - 1, on the device of x_t.
+        """
+        alpha_bar = self.alpha_bars[t]
+        beta = self.betas[t]
+        # 1. the clean image according to the model: add_noise turned around
+        x_0 = (x_t - (1 - alpha_bar).sqrt() * predicted_noise) / alpha_bar.sqrt()
+        # 2. real images are in [-1, 1]; near t = 999, dividing by sqrt(alpha_bar) ~ 0.00005 blows up any error
+        x_0 = x_0.clamp(-1, 1)
+        if t == 0:
+            return x_0   # last step: the clean image (here the mean below is exactly x_0)
+        # 3. a step towards x_0: mean of q(x_(t-1) | x_t, x_0), equation 7 of DDPM
+        alpha_bar_previous = self.alpha_bars[t - 1]
+        mean = (alpha_bar_previous.sqrt() * beta / (1 - alpha_bar) * x_0
+                + (1 - beta).sqrt() * (1 - alpha_bar_previous) / (1 - alpha_bar) * x_t)
+        # 4. fresh noise: keeps the images varied and lets the next steps correct the errors
+        variance = beta * (1 - alpha_bar_previous) / (1 - alpha_bar)
+        noise = torch.randn(x_t.shape, generator=generator, device=x_t.device)
+        return mean + variance.sqrt() * noise
