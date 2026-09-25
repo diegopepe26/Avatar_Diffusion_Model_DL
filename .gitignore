@@ -9,3 +9,5 @@ __pycache__/
 .pytest_cache/
 
 .superpowers
+# Editor settings: personal, they stay on each computer
+.vscode/
