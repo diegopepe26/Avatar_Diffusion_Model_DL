@@ -5,6 +5,7 @@ Run them with:  python -m pytest tests/
 
 import copy
 
+import pytest
 import torch
 from PIL import Image
 
@@ -14,7 +15,7 @@ from models.noise_scheduler import NoiseScheduler
 from models.sampling import sample
 from preprocessing.image_preprocessor import ImagePreprocessor
 from preprocessing.vocabulary import Vocabulary
-from train import diffusion_loss, update_ema
+from train import diffusion_loss, save_checkpoint, update_ema
 
 CAPTIONS = [
     'a cartoon avatar with pale skin, long blonde hair, no glasses and a beard',
@@ -116,3 +117,18 @@ def test_update_ema():
     old = next(ema.parameters()).clone()
     update_ema(ema, model, step=10_000, config=config)         # later: decay = EMA_DECAY = 0.999
     assert torch.allclose(next(ema.parameters()), 0.999 * old + 0.001 * new)
+
+
+def test_interrupted_save_keeps_the_previous_checkpoint(tmp_path, monkeypatch):
+    path = tmp_path / 'last.pt'
+    save_checkpoint({'epoch': 1}, path)
+
+    def interrupted_save(checkpoint, file):
+        open(file, 'wb').write(b'half a checkpoint')      # the write stops halfway (e.g. Colab disconnects)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(torch, 'save', interrupted_save)
+    with pytest.raises(KeyboardInterrupt):
+        save_checkpoint({'epoch': 2}, path)
+    monkeypatch.undo()
+    assert torch.load(path)['epoch'] == 1                  # the previous checkpoint is still there and readable

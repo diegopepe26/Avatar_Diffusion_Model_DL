@@ -60,6 +60,21 @@ def update_ema(ema, model, step, config):
             ema_weight.mul_(decay).add_(weight, alpha=1 - decay)
 
 
+def save_checkpoint(checkpoint, path):
+    """Write the checkpoint to a temporary file, then put it in place of path in one operation.
+
+    An interruption while writing (for example a Colab disconnect) leaves the previous checkpoint
+    intact, so the training can still resume.
+
+    Args:
+        checkpoint: dictionary to save.
+        path: destination file (last.pt).
+    """
+    temporary = path.with_suffix('.tmp')
+    torch.save(checkpoint, temporary)
+    temporary.replace(path)
+
+
 def main(config):
     """Train, validate, save a control grid every SAMPLE_EVERY epochs and the checkpoint at every epoch.
 
@@ -162,7 +177,7 @@ def main(config):
             ImagePreprocessor(config).save_preview([ImagePreprocessor.denormalize(image) for image in images], grid_file)
             print(f'   control grid: {grid_file.name}')
 
-        torch.save({
+        save_checkpoint({
             'epoch': epoch,
             'model': model.state_dict(),
             'ema': ema.state_dict(),
