@@ -53,6 +53,9 @@ All the settings are in `config.py`. The results go to `data/` (not in the repos
 | `models/text_encoder.py` | `EncoderBlock` and `TextEncoder`: caption ids -> one vector per token + `<pad>` mask |
 | `models/noise_scheduler.py` | `NoiseScheduler`: cosine noise schedule (`NUM_TIMESTEPS` steps); `add_noise` gives the noisy images x_t of steps t |
 | `models/unet.py` | `ResBlock`, `CrossAttention` (the pixels read the caption), `UNetBlock`, `UNet`: predicts the noise of x_t; `TEXT_CONDITIONING = False` gives the unconditional baseline |
+| `models/diffusion.py` | `DiffusionModel`: text encoder + UNet, from noisy images and captions to the predicted noise |
+| `models/sampling.py` | `sample`: from pure noise to images (DDPM Algorithm 2), classifier-free guidance, seed |
+| `train.py` | the training (DDPM Algorithm 1): loss, EMA, validation, control grids, checkpoint and resume |
 
 ## Use in training
 
@@ -69,6 +72,34 @@ text_encoder = TextEncoder(Config(), train.vocabulary)
 for images, tokens in loader:
     context, pad_mask = text_encoder(tokens)   # (B, 18, D_MODEL), (B, 18): the condition of the UNet
 ```
+
+## Training
+
+After `prepare_data.py`:
+
+```bash
+python train.py
+```
+
+The settings are in the `# ---- Training ----` section of `config.py`. Every experiment writes to its own
+folder in `runs/` (not in the repository):
+
+| Settings | Folder |
+|---|---|
+| `TEXT_CONDITIONING = True` | `runs/conditional/` |
+| `TEXT_CONDITIONING = False` | `runs/unconditional/` (baseline) |
+| `TRAIN_SUBSET = 64` | `runs/conditional_subset64/` (smoke test) |
+
+| File | Content |
+|---|---|
+| `last.pt` | checkpoint of the last epoch: weights, EMA weights, optimizer, epoch, random state, settings |
+| `log.csv` | train and validation loss of every epoch |
+| `samples_epochXXX.png` | control grid: the 8 `SAMPLE_PROMPTS` (4 seen, 4 held-out), 2 images each, EMA weights |
+
+If `last.pt` exists, `python train.py` resumes from the next epoch; delete the folder to start again.
+Smoke test: `TRAIN_SUBSET = 64` and a high `EPOCHS` (for example 2000): the loss must go down a lot and the
+grid must look like the training images. On Colab set `RUNS_DIR` to a folder of Google Drive, so the
+checkpoints survive the end of the session.
 
 ## Tests
 

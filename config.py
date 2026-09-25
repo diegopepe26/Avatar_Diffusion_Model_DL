@@ -88,7 +88,26 @@ class Config:
     TEXT_CONDITIONING = True         # False: unconditional baseline, no cross-attention
 
     # ---- Training ----
+    RUNS_DIR = ROOT / 'runs'          # one folder per experiment; on Colab point it to Google Drive
+    BATCH_SIZE = 128
+    LEARNING_RATE = 2e-4              # AdamW, constant, as in DDPM
+    GRAD_CLIP = 1.0                   # largest norm of the gradient, as in DDPM
+    EMA_DECAY = 0.999                 # average of the weights over the last ~1000 steps
+    CAPTION_DROPOUT = 0.1             # share of empty captions, for classifier-free guidance
+    EPOCHS = 500                      # ~22,000 steps, ~1.4 h on an RTX 4060 Laptop
+    SAMPLE_EVERY = 25                 # epochs between two control grids (0 = never)
+    TRAIN_SUBSET = 0                  # 0 = all the training images; 64 for the smoke test
     GUIDANCE_SCALE = 3.0              # strength of classifier-free guidance when generating
+    SAMPLE_PROMPTS = [                # control grid: 4 captions seen in training, 4 held-out (OOD)
+        'a cartoon avatar with pale skin, short brown hair, glasses and no beard',
+        'a cartoon avatar with tan skin, long black hair, no glasses and no beard',
+        'a cartoon avatar with light skin, medium ginger hair, sunglasses and a beard',
+        'a cartoon avatar with dark skin, short silver hair, no glasses and a beard',
+        'a cartoon avatar with dark skin, long black hair, no glasses and no beard',
+        'a cartoon avatar with dark skin, long brown hair, glasses and a beard',
+        'a cartoon avatar with pale skin, short blonde hair, sunglasses and no beard',
+        'a cartoon avatar with tan skin, medium blonde hair, sunglasses and a beard',
+    ]
 
     def to_dict(self):
         """Collect the settings that decide the data, to save them next to it.

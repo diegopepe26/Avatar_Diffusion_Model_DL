@@ -3,6 +3,8 @@
 Run them with:  python -m pytest tests/
 """
 
+import copy
+
 import torch
 from PIL import Image
 
@@ -12,6 +14,7 @@ from models.noise_scheduler import NoiseScheduler
 from models.sampling import sample
 from preprocessing.image_preprocessor import ImagePreprocessor
 from preprocessing.vocabulary import Vocabulary
+from train import diffusion_loss, update_ema
 
 CAPTIONS = [
     'a cartoon avatar with pale skin, long blonde hair, no glasses and a beard',
@@ -85,3 +88,31 @@ def test_save_preview(tmp_path):
     images = [ImagePreprocessor.denormalize(torch.rand(3, 32, 32) * 2 - 1) for _ in range(16)]
     ImagePreprocessor(config).save_preview(images, tmp_path / 'grid.png')
     assert Image.open(tmp_path / 'grid.png').size == (8 * 128, 2 * 128)    # 8 columns, 2 rows, 4x enlarged
+
+
+def test_diffusion_loss():
+    model, config, _, tokens = make_model()
+    model.eval()                                                          # no dropout, as in the validation
+    scheduler = NoiseScheduler(config)
+    images = torch.rand(2, 3, 32, 32) * 2 - 1
+    loss = diffusion_loss(model, scheduler, images, tokens, torch.Generator().manual_seed(0))
+    assert loss.dim() == 0                                                # one number
+    same = diffusion_loss(model, scheduler, images, tokens, torch.Generator().manual_seed(0))
+    assert torch.equal(loss, same)                                        # same seed, same t and noise
+    loss.backward()
+    assert model.text_encoder.embedding.weight.grad is not None           # the text encoder learns too
+
+
+def test_update_ema():
+    model, config, _, _ = make_model()
+    ema = copy.deepcopy(model)
+    with torch.no_grad():
+        for weight in model.parameters():
+            weight.add_(1.0)                                   # the model moves away from the EMA
+    old = next(ema.parameters()).clone()
+    new = next(model.parameters()).clone()
+    update_ema(ema, model, step=0, config=config)              # first step: decay = min(0.999, 1/10) = 0.1
+    assert torch.allclose(next(ema.parameters()), 0.1 * old + 0.9 * new)
+    old = next(ema.parameters()).clone()
+    update_ema(ema, model, step=10_000, config=config)         # later: decay = EMA_DECAY = 0.999
+    assert torch.allclose(next(ema.parameters()), 0.999 * old + 0.001 * new)

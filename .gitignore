@@ -1,6 +1,7 @@
 # Data stays on each computer: raw download and generated files
 dataset/
 data/
+runs/
 
 # Python
 __pycache__/
