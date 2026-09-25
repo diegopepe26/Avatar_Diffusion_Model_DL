@@ -67,6 +67,7 @@ All the settings are in `config.py`. The results go to `data/` (not in the repos
 | `models/diffusion.py` | `DiffusionModel`: text encoder + UNet, from noisy images and captions to the predicted noise |
 | `models/sampling.py` | `sample`: from pure noise to images (DDPM Algorithm 2), classifier-free guidance, seed |
 | `train.py` | the training (DDPM Algorithm 1): loss, EMA, validation, control grids, checkpoint and resume |
+| `make_training_gif.py` | the control grids of a training in one GIF, with the epoch written on top |
 
 ## Use in training
 
@@ -110,6 +111,13 @@ experiment writes to its own folder in `runs/` (not in the repository):
 
 If `last.pt` exists, the same command resumes from the next epoch; delete the folder to start again. On Colab set
 `RUNS_DIR` to a folder of Google Drive, so the checkpoints survive the end of the session.
+
+To see how the training improves the images, put its control grids in one GIF (one frame per grid, the epoch
+written on top, 0.5 s per frame):
+
+```bash
+python make_training_gif.py runs/conditional      # writes runs/conditional/training.gif
+```
 
 `DETERMINISTIC = True` (for both commands) makes the GPU always add up in the same order: two trainings from the
 same seed give exactly the same model, about 30% slower. With `False` they give almost the same model (the GPU
