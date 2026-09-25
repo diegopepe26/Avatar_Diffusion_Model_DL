@@ -82,6 +82,11 @@ class Config:
     # ---- Diffusion ----
     NUM_TIMESTEPS = 1000      # T: noise steps, t = 0 (almost clean) ... T - 1 (pure noise)
 
+    # ---- UNet ----
+    UNET_CHANNELS = (64, 128, 256)   # channels at 32x32, 16x16, 8x8
+    TIME_DIM = 4 * UNET_CHANNELS[0]  # size of the time embedding given to every ResBlock
+    TEXT_CONDITIONING = True         # False: unconditional baseline, no cross-attention
+
     def to_dict(self):
         """Collect the settings that decide the data, to save them next to it.
 
