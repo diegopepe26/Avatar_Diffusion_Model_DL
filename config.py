@@ -87,6 +87,9 @@ class Config:
     TIME_DIM = 4 * UNET_CHANNELS[0]  # size of the time embedding given to every ResBlock
     TEXT_CONDITIONING = True         # False: unconditional baseline, no cross-attention
 
+    # ---- Training ----
+    GUIDANCE_SCALE = 3.0              # strength of classifier-free guidance when generating
+
     def to_dict(self):
         """Collect the settings that decide the data, to save them next to it.
 
