@@ -4,7 +4,9 @@ import pytest
 import torch
 
 from config import Config
+from models.text_encoder import TextEncoder
 from models.unet import CrossAttention, UNet
+from preprocessing.vocabulary import Vocabulary
 
 
 def make_inputs(batch=2, size=32, text_dim=128):
@@ -79,3 +81,21 @@ def test_unet_trains_every_weight():
     (output * torch.randn_like(output)).sum().backward()   # any loss that uses every output
     for name, parameter in unet.named_parameters():
         assert parameter.grad is not None, f'{name} is not trained'
+
+
+def test_gradient_reaches_the_text_encoder():
+    caption = 'a cartoon avatar with pale skin, long blonde hair, no glasses and a beard'
+    config = Config()
+    vocabulary = Vocabulary(config)
+    vocabulary.build([caption])
+    text_encoder = TextEncoder(config, vocabulary)
+    unet = UNet(config)
+    tokens = torch.tensor([vocabulary.encode(caption)] * 2)
+    x_t, t, _, _ = make_inputs()
+
+    context, pad_mask = text_encoder(tokens)
+    output = unet(x_t, t, context, pad_mask)
+    (output * torch.randn_like(output)).sum().backward()   # any loss on the output of the UNet
+    # the loss of the UNet must train the text encoder too, down to the vectors of the words
+    gradient = text_encoder.embedding.weight.grad
+    assert gradient is not None and gradient.abs().sum() > 0
