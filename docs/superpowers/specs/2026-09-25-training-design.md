@@ -238,3 +238,7 @@ i training lunghi veri (li lanciate voi).
   precedente.
 - **Ordine a fine epoca**: training → validation → griglia → checkpoint → riga di log. Un'interruzione prima della
   riga fa ripetere epoche, mai righe del log.
+- **`DETERMINISTIC`** (`False` di default, vale anche per `--smoke-test`): con `True` la GPU usa solo
+  operazioni deterministiche (`torch.use_deterministic_algorithms`, `CUBLAS_WORKSPACE_CONFIG`): due training
+  dallo stesso seed danno esattamente lo stesso modello (misurato: differenza 0), circa il 30% più lento
+  (302 invece di 233 ms per passo). Con `False` differenze minime (0,00007 dopo 30 passi).

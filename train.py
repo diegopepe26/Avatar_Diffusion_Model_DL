@@ -10,6 +10,7 @@ import argparse
 import copy
 import csv
 import json
+import os
 import time
 
 import torch
@@ -92,6 +93,11 @@ def main(config, smoke_test=False):
         config.SAMPLE_EVERY = config.SMOKE_TEST_SAMPLE_EVERY
         config.CHECKPOINT_EVERY = config.SMOKE_TEST_CHECKPOINT_EVERY
     torch.manual_seed(config.SEED)
+    if config.DETERMINISTIC:
+        # the GPU always adds up in the same order: two trainings from the same seed give the same model
+        os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'    # required by cuBLAS for deterministic results
+        torch.use_deterministic_algorithms(True)
+        torch.backends.cudnn.benchmark = False
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # 1. One folder per experiment: the runs never overwrite each other

@@ -100,6 +100,11 @@ experiment writes to its own folder in `runs/` (not in the repository):
 If `last.pt` exists, the same command resumes from the next epoch; delete the folder to start again. On Colab set
 `RUNS_DIR` to a folder of Google Drive, so the checkpoints survive the end of the session.
 
+`DETERMINISTIC = True` (for both commands) makes the GPU always add up in the same order: two trainings from the
+same seed give exactly the same model, about 30% slower. With `False` they give almost the same model (the GPU
+changes the order of its sums). Generating from a saved checkpoint with the same seed gives the same images in
+both cases.
+
 **Smoke test** (`--smoke-test`): the model trains only on the first 64 training images, with their captions, and
 must learn them by heart. 8000 epochs of one step each, validation and checkpoint every 100 epochs: about 20
 minutes on an RTX 4060 Laptop. Every 1000 epochs a grid: the first row shows 8 real training images, the two rows

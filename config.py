@@ -97,6 +97,7 @@ class Config:
     EPOCHS = 500                      # ~22,000 steps, ~1.4 h on an RTX 4060 Laptop
     SAMPLE_EVERY = 25                 # epochs between two control grids (0 = never)
     CHECKPOINT_EVERY = 1              # epochs between two validations + checkpoints (1 = every epoch = 45 steps)
+    DETERMINISTIC = False             # True: two trainings from the same seed give exactly the same model (~30% slower)
     GUIDANCE_SCALE = 3.0              # strength of classifier-free guidance when generating
     SAMPLE_PROMPTS = [                # control grid: 4 captions seen in training, 4 held-out (OOD)
         'a cartoon avatar with pale skin, short brown hair, glasses and no beard',
