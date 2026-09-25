@@ -6,8 +6,19 @@ Google Cartoon Set (Deep Learning 2026_VI).
 ## Setup
 
 ```bash
+pip install torch --index-url https://download.pytorch.org/whl/cu126   # first: PyTorch with CUDA (NVIDIA GPU)
 pip install -r requirements.txt
 ```
+
+The first line matters on Windows: a plain `pip install torch` installs a CPU-only PyTorch, and the training
+would take days. If PyTorch is already installed without CUDA, add `--force-reinstall` to the first line. Check:
+
+```bash
+python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+```
+
+must print a version ending in `+cu126` and `True`. With more than one Python on the computer, make sure the
+terminal (and the interpreter selected in VS Code) is the one with this PyTorch. On Colab PyTorch already has CUDA.
 
 ## Data
 

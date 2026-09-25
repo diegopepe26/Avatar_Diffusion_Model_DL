@@ -99,6 +99,10 @@ def main(config, smoke_test=False):
         torch.use_deterministic_algorithms(True)
         torch.backends.cudnn.benchmark = False
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    if device == 'cpu':
+        # e.g. a CPU-only PyTorch (a plain "pip install torch" on Windows): the training would take days
+        print('WARNING: no GPU found, the training on CPU will be very slow. Check that PyTorch has CUDA:\n'
+              '   python -c "import torch; print(torch.__version__, torch.cuda.is_available())"   (see README, Setup)')
 
     # 1. One folder per experiment: the runs never overwrite each other
     name = 'conditional' if config.TEXT_CONDITIONING else 'unconditional'
