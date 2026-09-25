@@ -52,9 +52,10 @@ condizionamento, diversità), `generate.py` e demo non fanno parte di questo lav
 - **Validation** a ogni epoca sull'intero split `val`, con i pesi EMA, senza caption vuote, con `t` e
   rumore estratti da un generatore con seed fisso: le loss delle diverse epoche sono confrontabili.
   Test e OOD non si usano nel training.
-- **Griglia di controllo** ogni `SAMPLE_EVERY` epoche: 8 caption fisse × 2 seed = 16 avatar con i pesi
-  EMA, salvati come PNG (8 colonne = caption, 2 righe = seed). Stesse caption e stessi seed a ogni griglia:
-  le differenze dipendono solo da quanto ha imparato il modello.
+- **Griglia di controllo** ogni `SAMPLE_EVERY` epoche: le 8 caption fisse ripetute 2 volte = 16 avatar,
+  generati con i pesi EMA in una sola chiamata di `sample` con seed `SEED`, salvati come PNG (8 colonne =
+  caption, 2 righe = due immagini diverse per caption). Stesse caption e stesso seed a ogni griglia: le
+  differenze dipendono solo da quanto ha imparato il modello.
 
 ## Vincoli di stile
 
@@ -91,8 +92,7 @@ EPOCHS = 500                      # ~22,000 steps, ~1.4 h on an RTX 4060 Laptop
 SAMPLE_EVERY = 25                 # epochs between two control grids (0 = never)
 TRAIN_SUBSET = 0                  # 0 = all the training images; 64 for the smoke test
 GUIDANCE_SCALE = 3.0              # strength of classifier-free guidance when generating
-SAMPLE_SEEDS = [0, 1]             # one row of the control grid per seed
-SAMPLE_PROMPTS = [                # one column per caption: 4 seen in training, 4 held-out (OOD)
+SAMPLE_PROMPTS = [                # control grid: 4 captions seen in training, 4 held-out (OOD)
     'a cartoon avatar with pale skin, short brown hair, glasses and no beard',
     'a cartoon avatar with tan skin, long black hair, no glasses and no beard',
     'a cartoon avatar with light skin, medium ginger hair, sunglasses and a beard',
@@ -118,7 +118,7 @@ immagini): pelle scura con capelli lunghi, capelli biondi con occhiali da sole. 
   x_0 = (x_t − √(1 − ᾱ) · predicted_noise) / √ᾱ        # add_noise turned around
   x_0 = clamp(x_0, −1, 1)                               # real images are in [−1, 1]
   media = √ᾱ_prec · β / (1 − ᾱ) · x_0 + √(1 − β) · (1 − ᾱ_prec) / (1 − ᾱ) · x_t
-  t = 0  →  return media
+  t = 0  →  return x_0                                  # a t = 0 la media vale esattamente x_0
   varianza = β · (1 − ᾱ_prec) / (1 − ᾱ)                 # β̃_t
   return media + √varianza · z,   z = torch.randn(..., generator=generator)
   ```
