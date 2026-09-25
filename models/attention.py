@@ -13,21 +13,25 @@ class MultiHeadAttention(nn.Module):
     same outputs, same mask convention. So build_attention can give either of the two.
     """
 
-    def __init__(self, d_model, num_heads, dropout):
+    def __init__(self, d_model, num_heads, dropout, kdim=None):
         """Args:
-            d_model: size of the input and output vectors (D_MODEL).
+            d_model: size of the queries and of the output: D_MODEL in the text encoder,
+                the channels of the level in the UNet.
             num_heads: number of heads; each one works on d_model / num_heads values.
             dropout: probability of dropping an attention weight during training.
+            kdim: numbers per token of x_k and x_v, if different from d_model (the text in the UNet).
         """
         super().__init__()
         if d_model % num_heads != 0:
             raise ValueError(f'd_model ({d_model}) must be divisible by num_heads ({num_heads})')
         self.num_heads = num_heads
         self.head_dim = d_model // num_heads
-        # the weight matrices W_Q, W_K, W_V and W_O of the paper (each Linear also adds a bias)
+        # the weight matrices W_Q, W_K, W_V and W_O of the paper (each Linear also adds a bias);
+        # W_K and W_V take kdim numbers per token and give d_model: the text can be smaller than the image
+        kdim = d_model if kdim is None else kdim
         self.w_q = nn.Linear(d_model, d_model)
-        self.w_k = nn.Linear(d_model, d_model)
-        self.w_v = nn.Linear(d_model, d_model)
+        self.w_k = nn.Linear(kdim, d_model)
+        self.w_v = nn.Linear(kdim, d_model)
         self.w_o = nn.Linear(d_model, d_model)
         self.dropout = nn.Dropout(dropout)
 
@@ -40,8 +44,8 @@ class MultiHeadAttention(nn.Module):
 
         Args:
             x_q: (B, L_q, D), the sequence the queries come from.
-            x_k: (B, L_k, D), the sequence the keys come from.
-            x_v: (B, L_k, D), the sequence the values come from.
+            x_k: (B, L_k, kdim), the sequence the keys come from.
+            x_v: (B, L_k, kdim), the sequence the values come from.
             key_padding_mask: (B, L_k) bool, True where the token is <pad> (ignored); None = no mask.
 
         Returns:
@@ -69,18 +73,21 @@ class MultiHeadAttention(nn.Module):
         return self.w_o(output), weights.mean(dim=1)
 
 
-def build_attention(config):
+def build_attention(config, d_model, kdim=None):
     """Give the attention chosen in config.ATTENTION: ours or the one of PyTorch.
 
     Args:
-        config: the project Config (uses ATTENTION, D_MODEL, NUM_HEADS, DROPOUT).
+        config: the project Config (uses ATTENTION, NUM_HEADS, DROPOUT).
+        d_model: size of the attention: D_MODEL in the text encoder, the channels of the level in the UNet.
+        kdim: numbers per token of x_k and x_v, if different from d_model (the text in the UNet).
 
     Returns:
         MultiHeadAttention ('scratch') or nn.MultiheadAttention ('torch'), called the same way.
     """
     if config.ATTENTION == 'scratch':
-        return MultiHeadAttention(config.D_MODEL, config.NUM_HEADS, config.DROPOUT)
+        return MultiHeadAttention(d_model, config.NUM_HEADS, config.DROPOUT, kdim)
     if config.ATTENTION == 'torch':
         # batch_first: inputs (B, L, D) like ours, not the default (L, B, D)
-        return nn.MultiheadAttention(config.D_MODEL, config.NUM_HEADS, dropout=config.DROPOUT, batch_first=True)
+        return nn.MultiheadAttention(d_model, config.NUM_HEADS, dropout=config.DROPOUT, batch_first=True,
+                                     kdim=kdim, vdim=kdim)
     raise ValueError(f"ATTENTION must be 'scratch' or 'torch', not '{config.ATTENTION}'")

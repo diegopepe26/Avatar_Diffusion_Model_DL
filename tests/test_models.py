@@ -63,6 +63,33 @@ def test_attention_matches_pytorch():
     assert torch.all(our_weights[:, :, 4] == 0)   # nobody looks at a <pad>
 
 
+def test_attention_with_text_of_different_size_matches_pytorch():
+    torch.manual_seed(0)
+    # queries of 16 numbers (the image), keys and values from vectors of 8 numbers (the text)
+    ours = MultiHeadAttention(d_model=16, num_heads=4, dropout=0.1, kdim=8)
+    theirs = nn.MultiheadAttention(16, 4, dropout=0.1, batch_first=True, kdim=8, vdim=8)
+    # with kdim PyTorch keeps W_Q, W_K, W_V in three matrices (the biases stay stacked in one)
+    with torch.no_grad():
+        theirs.q_proj_weight.copy_(ours.w_q.weight)
+        theirs.k_proj_weight.copy_(ours.w_k.weight)
+        theirs.v_proj_weight.copy_(ours.w_v.weight)
+        theirs.in_proj_bias.copy_(torch.cat([ours.w_q.bias, ours.w_k.bias, ours.w_v.bias]))
+        theirs.out_proj.weight.copy_(ours.w_o.weight)
+        theirs.out_proj.bias.copy_(ours.w_o.bias)
+    ours.eval()     # no dropout: the two must give the same numbers
+    theirs.eval()
+
+    pixels = torch.randn(2, 6, 16)   # 6 pixel tokens
+    words = torch.randn(2, 5, 8)     # 5 word tokens
+    pad_mask = torch.tensor([[False, False, False, False, True],
+                             [False, False, False, True, True]])
+    our_output, our_weights = ours(pixels, words, words, key_padding_mask=pad_mask)
+    their_output, their_weights = theirs(pixels, words, words, key_padding_mask=pad_mask)
+    assert our_output.shape == (2, 6, 16)
+    assert torch.allclose(our_output, their_output, atol=1e-5)
+    assert torch.allclose(our_weights, their_weights, atol=1e-5)
+
+
 def test_attention_heads_must_divide_d_model():
     with pytest.raises(ValueError):
         MultiHeadAttention(d_model=128, num_heads=3, dropout=0.1)
@@ -71,12 +98,12 @@ def test_attention_heads_must_divide_d_model():
 def test_build_attention():
     config = Config()
     config.ATTENTION = 'scratch'
-    assert isinstance(build_attention(config), MultiHeadAttention)
+    assert isinstance(build_attention(config, config.D_MODEL), MultiHeadAttention)
     config.ATTENTION = 'torch'
-    assert isinstance(build_attention(config), nn.MultiheadAttention)
+    assert isinstance(build_attention(config, config.D_MODEL), nn.MultiheadAttention)
     config.ATTENTION = 'Scratch'   # a typo must stop, not silently pick one of the two
     with pytest.raises(ValueError):
-        build_attention(config)
+        build_attention(config, config.D_MODEL)
 
 
 @pytest.mark.parametrize('attention', ['scratch', 'torch'])

@@ -15,7 +15,7 @@ class EncoderBlock(nn.Module):
             config: the project Config (uses D_MODEL, FFN_DIM, DROPOUT and the attention settings).
         """
         super().__init__()
-        self.attention = build_attention(config)
+        self.attention = build_attention(config, config.D_MODEL)
         self.norm1 = nn.LayerNorm(config.D_MODEL)
         self.feed_forward = nn.Sequential(
             nn.Linear(config.D_MODEL, config.FFN_DIM),
