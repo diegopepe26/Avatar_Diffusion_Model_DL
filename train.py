@@ -1,10 +1,12 @@
 """Trains the diffusion model (text encoder + UNet) with the training algorithm of DDPM.
 
-Run it with:  python train.py      (after prepare_data.py, which prepares data/)
+Run it with:  python train.py                 (after prepare_data.py, which prepares data/)
+Smoke test:   python train.py --smoke-test    (only the first images: can the model learn them?)
 The settings are in config.py; the results go to runs/<experiment>/: last.pt, log.csv, control grids.
 If runs/<experiment>/last.pt exists, the training resumes from it.
 """
 
+import argparse
 import copy
 import csv
 import json
@@ -75,20 +77,27 @@ def save_checkpoint(checkpoint, path):
     temporary.replace(path)
 
 
-def main(config):
-    """Train, validate, save a control grid every SAMPLE_EVERY epochs and the checkpoint at every epoch.
+def main(config, smoke_test=False):
+    """Train, validate, save the control grids and the checkpoint; resume from last.pt if it exists.
 
     Args:
-        config: the project Config (uses the Training section and the settings of the model).
+        config: the project Config (uses the Training and Smoke test sections and the settings of the model).
+        smoke_test: train only on the first SMOKE_TEST_IMAGES training images, with the smoke test settings,
+            to check that the model can learn them by heart.
     """
-    print('Training of the cartoon diffusion model')
+    print('Training of the cartoon diffusion model' + (' (smoke test)' if smoke_test else ''))
+    if smoke_test:
+        # the smoke test settings replace the normal ones, for this run only
+        config.EPOCHS = config.SMOKE_TEST_EPOCHS
+        config.SAMPLE_EVERY = config.SMOKE_TEST_SAMPLE_EVERY
+        config.CHECKPOINT_EVERY = config.SMOKE_TEST_CHECKPOINT_EVERY
     torch.manual_seed(config.SEED)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # 1. One folder per experiment: the runs never overwrite each other
     name = 'conditional' if config.TEXT_CONDITIONING else 'unconditional'
-    if config.TRAIN_SUBSET:
-        name += f'_subset{config.TRAIN_SUBSET}'
+    if smoke_test:
+        name += '_smoke_test'
     run_dir = config.RUNS_DIR / name
     run_dir.mkdir(parents=True, exist_ok=True)
     print(f'1. Experiment: {run_dir} (device: {device})')
@@ -96,8 +105,8 @@ def main(config):
     # 2. The data prepared by prepare_data.py
     train = CartoonDataset(config, 'train')
     vocabulary = train.vocabulary
-    if config.TRAIN_SUBSET:
-        train = Subset(train, range(config.TRAIN_SUBSET))    # smoke test: only the first images
+    if smoke_test:
+        train = Subset(train, range(config.SMOKE_TEST_IMAGES))    # only the first images
     val = CartoonDataset(config, 'val')
     train_loader = DataLoader(train, batch_size=config.BATCH_SIZE, shuffle=True)
     val_loader = DataLoader(val, batch_size=config.BATCH_SIZE)
@@ -110,7 +119,7 @@ def main(config):
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.LEARNING_RATE)
     print(f'3. Model: {sum(p.numel() for p in model.parameters()):,} parameters')
 
-    # 4. Resume from the checkpoint of the last epoch, if there is one
+    # 4. Resume from the last checkpoint, if there is one
     checkpoint_file = run_dir / 'last.pt'
     first_epoch = 1
     if checkpoint_file.exists():
@@ -129,15 +138,21 @@ def main(config):
     # the settings of this run, as plain values (paths become text): the checkpoint opens on any computer
     settings = json.loads(json.dumps({name: getattr(config, name) for name in dir(config) if name.isupper()},
                                      default=str))
-    # the captions of the control grid, twice: 2 images per caption
-    grid_tokens = torch.tensor([vocabulary.encode(prompt) for prompt in config.SAMPLE_PROMPTS] * 2, device=device)
+    # the captions of the control grid, twice: 2 generated images per caption
+    real_images = []    # smoke test only: the real images, shown in the first row of the grid
+    if smoke_test:
+        first = [train[i] for i in range(8)]    # the first 8 training images and their captions
+        real_images = [ImagePreprocessor.denormalize(image) for image, _ in first]
+        grid_tokens = torch.stack([tokens for _, tokens in first] * 2).to(device)
+    else:
+        grid_tokens = torch.tensor([vocabulary.encode(prompt) for prompt in config.SAMPLE_PROMPTS] * 2, device=device)
     step = (first_epoch - 1) * len(train_loader)     # training steps already done (for the EMA)
 
     print(f'5. Epochs {first_epoch}-{config.EPOCHS}')
+    start = time.time()
+    total, steps = 0.0, 0                            # training loss since the last row of the log
     for epoch in range(first_epoch, config.EPOCHS + 1):
-        start = time.time()
         model.train()
-        total = 0.0
         for images, tokens in train_loader:
             images, tokens = images.to(device), tokens.to(device)
             if config.TEXT_CONDITIONING:
@@ -152,43 +167,54 @@ def main(config):
             update_ema(ema, model, step, config)
             step += 1
             total += loss.item()
-        train_loss = total / len(train_loader)
+            steps += 1
 
-        # validation: EMA weights, real captions, the same t and noise at every epoch (fixed seed)
-        generator = torch.Generator(device=device).manual_seed(config.SEED)
-        with torch.no_grad():
-            val_loss = sum(diffusion_loss(ema, scheduler, images.to(device), tokens.to(device), generator).item()
-                           for images, tokens in val_loader) / len(val_loader)
-        seconds = time.time() - start
-
-        log_file = run_dir / 'log.csv'
-        new_log = not log_file.exists()
-        with open(log_file, 'a', newline='') as f:
-            writer = csv.writer(f)
-            if new_log:
-                writer.writerow(['epoch', 'train_loss', 'val_loss', 'seconds'])
-            writer.writerow([epoch, f'{train_loss:.6f}', f'{val_loss:.6f}', f'{seconds:.1f}'])
-        print(f'   epoch {epoch}/{config.EPOCHS}: train loss {train_loss:.4f}, val loss {val_loss:.4f}, {seconds:.0f} s')
+        # validation, checkpoint and log only every CHECKPOINT_EVERY epochs (and at the last one):
+        # in the smoke test an epoch is a single step, and doing them every time would take most of the time
+        checkpoint_epoch = epoch % config.CHECKPOINT_EVERY == 0 or epoch == config.EPOCHS
+        if checkpoint_epoch:
+            # validation: EMA weights, real captions, the same t and noise every time (fixed seed)
+            generator = torch.Generator(device=device).manual_seed(config.SEED)
+            with torch.no_grad():
+                val_loss = sum(diffusion_loss(ema, scheduler, images.to(device), tokens.to(device), generator).item()
+                               for images, tokens in val_loader) / len(val_loader)
 
         if config.SAMPLE_EVERY and epoch % config.SAMPLE_EVERY == 0:
             # control grid: same captions and seed every time, only the model changes
             images = sample(ema, scheduler, grid_tokens, config, config.SEED)
             grid_file = run_dir / f'samples_epoch{epoch:03d}.png'
-            ImagePreprocessor(config).save_preview([ImagePreprocessor.denormalize(image) for image in images], grid_file)
+            generated = [ImagePreprocessor.denormalize(image) for image in images]
+            ImagePreprocessor(config).save_preview(real_images + generated, grid_file)
             print(f'   control grid: {grid_file.name}')
 
-        save_checkpoint({
-            'epoch': epoch,
-            'model': model.state_dict(),
-            'ema': ema.state_dict(),
-            'optimizer': optimizer.state_dict(),
-            'rng': torch.get_rng_state(),
-            'cuda_rng': torch.cuda.get_rng_state_all() if device == 'cuda' else None,
-            'settings': settings,
-        }, checkpoint_file)
+        if checkpoint_epoch:
+            save_checkpoint({
+                'epoch': epoch,
+                'model': model.state_dict(),
+                'ema': ema.state_dict(),
+                'optimizer': optimizer.state_dict(),
+                'rng': torch.get_rng_state(),
+                'cuda_rng': torch.cuda.get_rng_state_all() if device == 'cuda' else None,
+                'settings': settings,
+            }, checkpoint_file)
+            # the row of the log after the checkpoint: an interruption before it repeats epochs, never rows
+            train_loss, seconds = total / steps, time.time() - start
+            log_file = run_dir / 'log.csv'
+            new_log = not log_file.exists()
+            with open(log_file, 'a', newline='') as f:
+                writer = csv.writer(f)
+                if new_log:
+                    writer.writerow(['epoch', 'train_loss', 'val_loss', 'seconds'])
+                writer.writerow([epoch, f'{train_loss:.6f}', f'{val_loss:.6f}', f'{seconds:.1f}'])
+            print(f'   epoch {epoch}/{config.EPOCHS}: train loss {train_loss:.4f}, val loss {val_loss:.4f}, {seconds:.0f} s')
+            start = time.time()
+            total, steps = 0.0, 0
 
     print(f'Done: {run_dir}')
 
 
 if __name__ == '__main__':
-    main(Config())
+    parser = argparse.ArgumentParser(description='Train the cartoon diffusion model (settings in config.py).')
+    parser.add_argument('--smoke-test', action='store_true',
+                        help='train only on the first SMOKE_TEST_IMAGES training images, to check that it learns them')
+    main(Config(), smoke_test=parser.parse_args().smoke_test)

@@ -96,7 +96,7 @@ class Config:
     CAPTION_DROPOUT = 0.1             # share of empty captions, for classifier-free guidance
     EPOCHS = 500                      # ~22,000 steps, ~1.4 h on an RTX 4060 Laptop
     SAMPLE_EVERY = 25                 # epochs between two control grids (0 = never)
-    TRAIN_SUBSET = 0                  # 0 = all the training images; 64 for the smoke test
+    CHECKPOINT_EVERY = 1              # epochs between two validations + checkpoints (1 = every epoch = 45 steps)
     GUIDANCE_SCALE = 3.0              # strength of classifier-free guidance when generating
     SAMPLE_PROMPTS = [                # control grid: 4 captions seen in training, 4 held-out (OOD)
         'a cartoon avatar with pale skin, short brown hair, glasses and no beard',
@@ -108,6 +108,12 @@ class Config:
         'a cartoon avatar with pale skin, short blonde hair, sunglasses and no beard',
         'a cartoon avatar with tan skin, medium blonde hair, sunglasses and a beard',
     ]
+
+    # ---- Smoke test (python train.py --smoke-test) ----
+    SMOKE_TEST_IMAGES = 64            # train only on the first images of the training split
+    SMOKE_TEST_EPOCHS = 8000          # one step per epoch
+    SMOKE_TEST_SAMPLE_EVERY = 1000    # a control grid every 1000 epochs
+    SMOKE_TEST_CHECKPOINT_EVERY = 100 # validation + checkpoint every 100 epochs: ~20 min instead of ~2.5 h
 
     def to_dict(self):
         """Collect the settings that decide the data, to save them next to it.

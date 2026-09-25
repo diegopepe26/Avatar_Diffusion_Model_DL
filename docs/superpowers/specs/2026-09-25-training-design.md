@@ -222,3 +222,19 @@ da `last.pt`.
 `generate.py` e demo (prompt + seed → immagine), valutazione (FID/KID, classificatore degli attributi per
 le metriche di condizionamento, diversità tra seed, memoria), mixed precision, sampler più veloci (DDIM),
 i training lunghi veri (li lanciate voi).
+
+## Modifiche dopo l'implementazione (2026-09-25)
+
+- **Checkpoint atomico** (revisione finale): `last.pt` si scrive su `last.tmp` e poi lo sostituisce in un colpo
+  solo (`save_checkpoint`), così un'interruzione durante il salvataggio non rovina il checkpoint precedente.
+- **Smoke test con un flag**: `python train.py --smoke-test` al posto di `TRAIN_SUBSET`. Usa la sezione
+  `# ---- Smoke test ----` di `config.py` (`SMOKE_TEST_IMAGES = 64`, `SMOKE_TEST_EPOCHS = 8000`,
+  `SMOKE_TEST_SAMPLE_EVERY = 1000`, `SMOKE_TEST_CHECKPOINT_EVERY = 100`), cartella `runs/conditional_smoke_test/`.
+  La griglia dello smoke test ha in prima riga le prime 8 immagini vere di training e sotto 2 immagini generate
+  dalle loro caption.
+- **`CHECKPOINT_EVERY`** (1 nel training vero, 100 nello smoke test): validation, checkpoint e riga di log ogni
+  N epoche (e all'ultima). Nello smoke test un'epoca è un solo passo: con validation e checkpoint a ogni epoca
+  durerebbe ~2,5 ore invece di ~20 minuti. Una riga di `log.csv` riporta la loss di training media dalla riga
+  precedente.
+- **Ordine a fine epoca**: training → validation → griglia → checkpoint → riga di log. Un'interruzione prima della
+  riga fa ripetere epoche, mai righe del log.

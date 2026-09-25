@@ -78,28 +78,33 @@ for images, tokens in loader:
 After `prepare_data.py`:
 
 ```bash
-python train.py
+python train.py                  # the real training
+python train.py --smoke-test     # the smoke test
 ```
 
-The settings are in the `# ---- Training ----` section of `config.py`. Every experiment writes to its own
-folder in `runs/` (not in the repository):
+The settings are in the `# ---- Training ----` and `# ---- Smoke test ----` sections of `config.py`. Every
+experiment writes to its own folder in `runs/` (not in the repository):
 
-| Settings | Folder |
+| Run | Folder |
 |---|---|
-| `TEXT_CONDITIONING = True` | `runs/conditional/` |
-| `TEXT_CONDITIONING = False` | `runs/unconditional/` (baseline) |
-| `TRAIN_SUBSET = 64` | `runs/conditional_subset64/` (smoke test) |
+| `python train.py`, `TEXT_CONDITIONING = True` | `runs/conditional/` |
+| `python train.py`, `TEXT_CONDITIONING = False` | `runs/unconditional/` (baseline) |
+| `python train.py --smoke-test` | `runs/conditional_smoke_test/` |
 
 | File | Content |
 |---|---|
-| `last.pt` | checkpoint of the last epoch: weights, EMA weights, optimizer, epoch, random state, settings |
-| `log.csv` | train and validation loss of every epoch |
-| `samples_epochXXX.png` | control grid: the 8 `SAMPLE_PROMPTS` (4 seen, 4 held-out), 2 images each, EMA weights |
+| `last.pt` | checkpoint: weights, EMA weights, optimizer, epoch, random state, settings |
+| `log.csv` | one row every `CHECKPOINT_EVERY` epochs: mean train loss since the previous row, validation loss, seconds |
+| `samples_epochXXX.png` | control grid every `SAMPLE_EVERY` epochs, EMA weights: the 8 `SAMPLE_PROMPTS` (4 seen, 4 held-out), 2 images each |
 
-If `last.pt` exists, `python train.py` resumes from the next epoch; delete the folder to start again.
-Smoke test: `TRAIN_SUBSET = 64` and a high `EPOCHS` (for example 2000): the loss must go down a lot and the
-grid must look like the training images. On Colab set `RUNS_DIR` to a folder of Google Drive, so the
-checkpoints survive the end of the session.
+If `last.pt` exists, the same command resumes from the next epoch; delete the folder to start again. On Colab set
+`RUNS_DIR` to a folder of Google Drive, so the checkpoints survive the end of the session.
+
+**Smoke test** (`--smoke-test`): the model trains only on the first 64 training images, with their captions, and
+must learn them by heart. 8000 epochs of one step each, validation and checkpoint every 100 epochs: about 20
+minutes on an RTX 4060 Laptop. Every 1000 epochs a grid: the first row shows 8 real training images, the two rows
+below show images generated from their captions, which must look more and more like the first row. The train loss
+goes down a lot; the validation loss goes up after a while (the model memorizes, it does not generalize: expected).
 
 ## Tests
 
