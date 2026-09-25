@@ -77,16 +77,18 @@ class ImagePreprocessor:
                 first_images.append(image)
             if (i + 1) % 2000 == 0:
                 print(f'   {i + 1}/{len(data)} images')
-        self.save_preview(first_images)
+        self.save_preview(first_images, self.config.PREVIEW_FILE)
 
-    def save_preview(self, images):
-        """Save up to 64 images in an 8x8 grid, enlarged 4 times to see the real pixels.
+    def save_preview(self, images, path):
+        """Save images in a grid of 8 columns, enlarged 4 times to see the real pixels.
 
         Args:
-            images: list of PIL images.
+            images: list of PIL images (64 for the data preview: 8 rows; 16 for a training grid: 2 rows).
+            path: destination PNG file.
         """
         side = self.size * 4
-        grid = Image.new('RGB', (8 * side, 8 * side), self.background)
-        for i, image in enumerate(images[:64]):
+        rows = (len(images) + 7) // 8
+        grid = Image.new('RGB', (8 * side, rows * side), self.background)
+        for i, image in enumerate(images):
             grid.paste(image.resize((side, side), Image.NEAREST), ((i % 8) * side, (i // 8) * side))
-        grid.save(self.config.PREVIEW_FILE)
+        grid.save(path)

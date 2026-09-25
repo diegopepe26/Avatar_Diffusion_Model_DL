@@ -4,11 +4,13 @@ Run them with:  python -m pytest tests/
 """
 
 import torch
+from PIL import Image
 
 from config import Config
 from models.diffusion import DiffusionModel
 from models.noise_scheduler import NoiseScheduler
 from models.sampling import sample
+from preprocessing.image_preprocessor import ImagePreprocessor
 from preprocessing.vocabulary import Vocabulary
 
 CAPTIONS = [
@@ -76,3 +78,10 @@ def test_sample():
         assert torch.isfinite(images).all()
         assert torch.equal(images, sample(model, scheduler, tokens, config, seed=0))       # same seed, same images
         assert not torch.equal(images, sample(model, scheduler, tokens, config, seed=1))
+
+
+def test_save_preview(tmp_path):
+    config = Config()
+    images = [ImagePreprocessor.denormalize(torch.rand(3, 32, 32) * 2 - 1) for _ in range(16)]
+    ImagePreprocessor(config).save_preview(images, tmp_path / 'grid.png')
+    assert Image.open(tmp_path / 'grid.png').size == (8 * 128, 2 * 128)    # 8 columns, 2 rows, 4x enlarged
