@@ -109,16 +109,26 @@ class UNetBlock(nn.Module):
 
 
 class UNet(nn.Module):
-    """Three resolutions (32, 16, 8), two blocks per level, skip connections by concatenation."""
+    """Two blocks per level, skip connections by concatenation, the bottom always at 8x8.
+
+    IMAGE_SIZE = 32: three resolutions (32, 16, 8). IMAGE_SIZE = 64: the same network with one more level
+    outside, at 64x64 (64, 32, 16, 8).
+    """
 
     def __init__(self, config):
         """Args:
             config: the project Config (uses UNET_CHANNELS, TIME_DIM, TEXT_CONDITIONING and the block settings).
         """
         super().__init__()
+        if config.IMAGE_SIZE not in (32, 64):
+            raise ValueError(f'IMAGE_SIZE must be 32 or 64, not {config.IMAGE_SIZE}')
         c1, c2, c3 = config.UNET_CHANNELS          # 64, 128, 256: channels at 32x32, 16x16, 8x8
         self.base_channels = c1
         self.text_conditioning = config.TEXT_CONDITIONING
+        # 64x64: one more level outside the 32x32 network (64 -> 32), so the bottom is still 8x8, the
+        # cross-attention still at 16x16 and 8x8 and every bottom pixel still sees the whole image.
+        # At 32x32 its layers do not exist: the network and its checkpoints stay as they were.
+        self.outer_level = config.IMAGE_SIZE == 64
         # time embedding: sin/cos of t (the same formula as the positions of the text), then a small MLP
         self.time_mlp = nn.Sequential(
             nn.Linear(c1, config.TIME_DIM),
@@ -126,6 +136,9 @@ class UNet(nn.Module):
             nn.Linear(config.TIME_DIM, config.TIME_DIM),
         )
         self.conv_in = nn.Conv2d(3, c1, 3, padding=1)
+        if self.outer_level:
+            self.down0 = nn.ModuleList([UNetBlock(c1, c1, config, False), UNetBlock(c1, c1, config, False)])
+            self.downsample0 = nn.Conv2d(c1, c1, 3, stride=2, padding=1)                      # 64 -> 32
         # down: two blocks per level, then a stride-2 convolution halves the size
         self.down1 = nn.ModuleList([UNetBlock(c1, c1, config, False), UNetBlock(c1, c1, config, False)])
         self.downsample1 = nn.Conv2d(c1, c1, 3, stride=2, padding=1)                          # 32 -> 16
@@ -138,13 +151,16 @@ class UNet(nn.Module):
         self.up2 = nn.ModuleList([UNetBlock(c3 + c2, c2, config, True), UNetBlock(c2, c2, config, True)])
         self.upsample1 = nn.Sequential(nn.Upsample(scale_factor=2, mode='nearest'), nn.Conv2d(c2, c2, 3, padding=1))
         self.up1 = nn.ModuleList([UNetBlock(c2 + c1, c1, config, False), UNetBlock(c1, c1, config, False)])
+        if self.outer_level:
+            self.upsample0 = nn.Sequential(nn.Upsample(scale_factor=2, mode='nearest'), nn.Conv2d(c1, c1, 3, padding=1))
+            self.up0 = nn.ModuleList([UNetBlock(c1 + c1, c1, config, False), UNetBlock(c1, c1, config, False)])
         self.conv_out = nn.Sequential(nn.GroupNorm(32, c1), nn.SiLU(), nn.Conv2d(c1, 3, 3, padding=1))
 
     def forward(self, x_t, t, context=None, pad_mask=None):
         """Predict the noise that NoiseScheduler.add_noise put into x_t.
 
         Args:
-            x_t: (B, 3, H, W) noisy images, H and W divisible by 4 (32 or 64).
+            x_t: (B, 3, IMAGE_SIZE, IMAGE_SIZE) noisy images.
             t: (B,) integer steps of the images.
             context: (B, L, D_MODEL) from the TextEncoder; not needed if TEXT_CONDITIONING is False.
             pad_mask: (B, L) bool from the TextEncoder, True where the token is <pad>.
@@ -156,6 +172,11 @@ class UNet(nn.Module):
             raise ValueError('TEXT_CONDITIONING is True: the UNet needs the context of the TextEncoder')
         time = self.time_mlp(sinusoidal_embedding(t, self.base_channels))    # (B, TIME_DIM)
         x = self.conv_in(x_t)
+        if self.outer_level:
+            for block in self.down0:
+                x = block(x, time, context, pad_mask)
+            skip0 = x                                                # (B, c1, 64, 64)
+            x = self.downsample0(x)
         for block in self.down1:
             x = block(x, time, context, pad_mask)
         skip1 = x                                                    # (B, c1, 32, 32)
@@ -172,4 +193,8 @@ class UNet(nn.Module):
         x = torch.cat([self.upsample1(x), skip1], dim=1)             # (B, c2 + c1, 32, 32)
         for block in self.up1:
             x = block(x, time, context, pad_mask)
+        if self.outer_level:
+            x = torch.cat([self.upsample0(x), skip0], dim=1)         # (B, c1 + c1, 64, 64)
+            for block in self.up0:
+                x = block(x, time, context, pad_mask)
         return self.conv_out(x)

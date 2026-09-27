@@ -63,7 +63,7 @@ All the settings are in `config.py`. The results go to `data/` (not in the repos
 | `models/attention.py` | `MultiHeadAttention` written from scratch; `build_attention` gives it or `nn.MultiheadAttention` (`Config.ATTENTION`) |
 | `models/text_encoder.py` | `EncoderBlock` and `TextEncoder`: caption ids -> one vector per token + `<pad>` mask |
 | `models/noise_scheduler.py` | `NoiseScheduler`: cosine noise schedule (`NUM_TIMESTEPS` steps); `add_noise` gives the noisy images x_t of steps t |
-| `models/unet.py` | `ResBlock`, `CrossAttention` (the pixels read the caption), `UNetBlock`, `UNet`: predicts the noise of x_t; `TEXT_CONDITIONING = False` gives the unconditional baseline |
+| `models/unet.py` | `ResBlock`, `CrossAttention` (the pixels read the caption), `UNetBlock`, `UNet`: predicts the noise of x_t; `TEXT_CONDITIONING = False` gives the unconditional baseline; `IMAGE_SIZE = 64` adds a level outside, so the bottom is still 8x8 |
 | `models/diffusion.py` | `DiffusionModel`: text encoder + UNet, from noisy images and captions to the predicted noise |
 | `models/sampling.py` | `sample`: from pure noise to images (DDPM Algorithm 2), classifier-free guidance, seed |
 | `train.py` | the training (DDPM Algorithm 1): loss, EMA, validation, control grids, checkpoint and resume |

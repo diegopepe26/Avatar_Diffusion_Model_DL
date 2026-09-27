@@ -29,10 +29,31 @@ def test_unet_output_shape(attention):
     assert unet(x_t, t, context, pad_mask).shape == (2, 3, 32, 32)   # the predicted noise, like x_t
 
 
-def test_unet_64x64_images():
-    unet = UNet(Config())                                            # IMAGE_SIZE can also be 64
+def test_unet_32_keeps_its_layers():
+    # the same layers as before the 64x64 level: the checkpoints of the 32x32 trainings still load
+    layers = {name.split('.')[0] for name in UNet(Config()).state_dict()}
+    assert layers == {'time_mlp', 'conv_in', 'down1', 'downsample1', 'down2', 'downsample2', 'middle',
+                      'upsample2', 'up2', 'upsample1', 'up1', 'conv_out'}
+
+
+def test_unet_64_has_one_more_level():
+    config = Config()
+    config.IMAGE_SIZE = 64
+    unet = UNet(config)
+    sizes = []
+    unet.middle[0].register_forward_pre_hook(lambda module, inputs: sizes.append(inputs[0].shape[-1]))
     x_t, t, context, pad_mask = make_inputs(size=64)
     assert unet(x_t, t, context, pad_mask).shape == (2, 3, 64, 64)
+    assert sizes == [8]                                              # the bottom is still 8x8
+    assert sum(isinstance(module, CrossAttention) for module in unet.modules()) == 5
+    assert all(block.attention is None for block in [*unet.down0, *unet.up0])   # no text at 64x64
+
+
+def test_unet_image_size_must_be_32_or_64():
+    config = Config()
+    config.IMAGE_SIZE = 48
+    with pytest.raises(ValueError):
+        UNet(config)
 
 
 def test_unet_with_d_model_64():
