@@ -65,7 +65,7 @@ RTX 4060 Laptop. Set `IMAGE_SIZE = 32` to go back.
 | `preprocessing/dataset_splitter.py` | `DatasetSplitter`: OOD pairs, then test/val/train by combination, checks |
 | `preprocessing/vocabulary.py` | `Vocabulary`: tokens <-> ids, built from train only |
 | `preprocessing/image_preprocessor.py` | `ImagePreprocessor`: white background, 32x32, normalization to [-1, 1] |
-| `preprocessing/cartoon_dataset.py` | `CartoonDataset`: PyTorch Dataset of one split |
+| `preprocessing/cartoon_dataset.py` | `CartoonDataset`: PyTorch Dataset of one split (images, caption ids, `labels` = the five words as class numbers); `attribute_labels`: words -> class numbers |
 | `models/sinusoidal.py` | `sinusoidal_embedding`: sine/cosine vectors for token positions (and the UNet time steps) |
 | `models/attention.py` | `MultiHeadAttention` written from scratch; `build_attention` gives it or `nn.MultiheadAttention` (`Config.ATTENTION`) |
 | `models/text_encoder.py` | `EncoderBlock` and `TextEncoder`: caption ids -> one vector per token + `<pad>` mask |
@@ -77,6 +77,8 @@ RTX 4060 Laptop. Set `IMAGE_SIZE = 32` to go back.
 | `make_training_gif.py` | the control grids of a training in one GIF, with the epoch written on top |
 | `generate.py` | load a trained experiment (settings and EMA weights from its checkpoint) and generate one image per seed |
 | `app.py` | web demo (Gradio): attributes from menus, seed, number of images, guidance, experiment; shows and saves the images |
+| `models/attribute_classifier.py` | `AttributeClassifier`: small CNN, one head per attribute; `measure_accuracy`: share of right words, per attribute and all five together |
+| `train_classifier.py` | trains the attribute classifier on the real training images and half of the real OOD images, keeps the best epoch on val, measures it on the real images it has never seen |
 
 ## Use in training
 
@@ -152,6 +154,35 @@ has its own seed (the next ones get seed + 1, + 2, ...): the same prompt, seed a
 same image. With the box checked, the images are saved in `runs/<experiment>/generated/`, named after the
 attributes, the guidance and the seed. One image takes about 19 s at 32x32 on an RTX 4060 Laptop. On Colab,
 `python app.py --share` also prints a public link.
+
+## Attribute classifier
+
+The judge of the conditioning metric: FID and KID say whether the generated images look like real avatars, not
+whether they show the words of their prompt. A small CNN (about 290,000 parameters: three convolutional blocks,
+the mean over all the pixels, one linear head per attribute) is trained from scratch on real images and tells the
+five words of an avatar. After `prepare_data.py`:
+
+```bash
+python train_classifier.py
+```
+
+About a minute at 32x32 on an RTX 4060 Laptop (50 epochs). It works at `IMAGE_SIZE` (one classifier per size) and
+writes to `runs/classifier_32/` (`_64` with `IMAGE_SIZE = 64`):
+
+| File | Content |
+|---|---|
+| `classifier.pt` | weights of the best epoch on val (share of images with all five words right), its settings, epoch and val accuracy |
+| `log.csv` | one row per epoch: train loss, accuracy on its training images and on val (all five right); a growing gap between the two means overfitting |
+| `accuracy.json` | share of right words on the real val and test images, on the OOD check half and on each held-out pair: the ceiling of the conditioning metric |
+
+It trains on the training images **and on half of the real OOD images** (chosen with `SEED`): trained on the
+training images only, it took shortcuts on the held-out pairs (for example dark skin + long hair -> "tan"), and
+on the generated OOD images its errors would mix with those of the diffusion model. The classifier is only a
+measuring tool: the diffusion model still never sees the OOD images. The other half of the OOD images (the check
+half) measures how often it is right on the held-out combinations.
+
+The weights are in `classifier.pt` and not in `last.pt`, so the demo does not list the classifier among the
+experiments. The training does not resume: run it again to start from scratch.
 
 ## Tests
 

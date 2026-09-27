@@ -118,7 +118,7 @@ class Config:
 
     # ---- Attribute classifier (python train_classifier.py) ----
     CLASSIFIER_CHANNELS = (32, 64, 128)  # channels of the three blocks; the image halves after each block
-    CLASSIFIER_EPOCHS = 30               # the best epoch on val is kept
+    CLASSIFIER_EPOCHS = 50               # the best epoch on val is kept (with 30 the best was still the last one)
     CLASSIFIER_LEARNING_RATE = 1e-3      # AdamW, constant
 
     def to_dict(self):
