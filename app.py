@@ -41,6 +41,23 @@ def caption_and_warning(*words):
     return caption, warning
 
 
+def file_name(words, seed, guidance, text_conditioning):
+    """Name of a saved image, with everything that decides it, so that no two settings overwrite each other.
+
+    Args:
+        words: the words chosen in the menus, in the order of ATTRIBUTES.
+        seed: seed of the image.
+        guidance: strength of classifier-free guidance.
+        text_conditioning: False for the baseline, which ignores the words and the guidance.
+
+    Returns:
+        e.g. 'pale_long_blonde_no-glasses_a-beard_guidance3_seed7.png', or 'unconditional_seed7.png'.
+    """
+    if not text_conditioning:
+        return f'unconditional_seed{seed}.png'
+    return '_'.join(word.replace(' ', '-') for word in words) + f'_guidance{guidance:g}_seed{seed}.png'
+
+
 def on_generate(experiment, seed, count, guidance, save, *words):
     """Generate the images, show them and, if asked, save them in the folder of the experiment.
 
@@ -72,9 +89,8 @@ def on_generate(experiment, seed, count, guidance, save, *words):
     if save:
         folder = config.RUNS_DIR / experiment / 'generated'
         folder.mkdir(exist_ok=True)
-        name = '_'.join(word.replace(' ', '-') for word in words) if run_config.TEXT_CONDITIONING else 'unconditional'
         for image, image_seed in zip(images, seeds):
-            image.save(folder / f'{name}_seed{image_seed}.png')
+            image.save(folder / file_name(words, image_seed, guidance, run_config.TEXT_CONDITIONING))
         message += f' Saved in {folder}.'
     return [(image, f'seed {image_seed}') for image, image_seed in zip(images, seeds)], message
 
@@ -101,7 +117,8 @@ def build_page():
             guidance = gr.Slider(1, 7, value=config.GUIDANCE_SCALE, step=0.5, label='Guidance')
         save = gr.Checkbox(value=True, label='Save the images in the folder of the experiment')
         button = gr.Button('Generate', variant='primary')
-        gallery = gr.Gallery(label='Generated images', columns=4)
+        # png: the default webp would blur the enlarged pixels and change their colors
+        gallery = gr.Gallery(label='Generated images', columns=4, format='png')
         message = gr.Markdown()
 
         # the prompt follows the menus; it is also written when the page opens

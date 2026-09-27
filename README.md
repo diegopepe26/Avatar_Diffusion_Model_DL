@@ -148,9 +148,10 @@ python app.py            # then open the address it prints, e.g. http://127.0.0.
 A web page: choose the experiment (the folders of `runs/` with a checkpoint), the five attributes, the seed of
 the first image, the number of images and the guidance, then press **Generate**. The prompt is composed from the
 attributes with the training template, and a warning appears for the held-out combinations (OOD). Every image
-has its own seed (the next ones get seed + 1, + 2, ...): the same prompt and seed always give the same image.
-With the box checked, the images are saved in `runs/<experiment>/generated/`. One image takes about 19 s at
-32x32 on an RTX 4060 Laptop. On Colab, `python app.py --share` also prints a public link.
+has its own seed (the next ones get seed + 1, + 2, ...): the same prompt, seed and guidance always give the
+same image. With the box checked, the images are saved in `runs/<experiment>/generated/`, named after the
+attributes, the guidance and the seed. One image takes about 19 s at 32x32 on an RTX 4060 Laptop. On Colab,
+`python app.py --share` also prints a public link.
 
 ## Tests
 
