@@ -99,9 +99,9 @@ experiment writes to its own folder in `runs/` (not in the repository):
 
 | Run | Folder |
 |---|---|
-| `python train.py`, `TEXT_CONDITIONING = True` | `runs/conditional/` |
-| `python train.py`, `TEXT_CONDITIONING = False` | `runs/unconditional/` (baseline) |
-| `python train.py --smoke-test` | `runs/conditional_smoke_test/` |
+| `python train.py`, `TEXT_CONDITIONING = True` | `runs/conditional_32/` (`_64` with `IMAGE_SIZE = 64`) |
+| `python train.py`, `TEXT_CONDITIONING = False` | `runs/unconditional_32/` (baseline) |
+| `python train.py --smoke-test` | `runs/conditional_smoke_test_32/` |
 
 | File | Content |
 |---|---|
@@ -116,7 +116,7 @@ To see how the training improves the images, put its control grids in one GIF (o
 written on top, 0.5 s per frame):
 
 ```bash
-python make_training_gif.py runs/conditional      # writes runs/conditional/training.gif
+python make_training_gif.py runs/conditional_32      # writes runs/conditional_32/training.gif
 ```
 
 `DETERMINISTIC = True` (for both commands) makes the GPU always add up in the same order: two trainings from the

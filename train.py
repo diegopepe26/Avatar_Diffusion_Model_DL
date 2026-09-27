@@ -108,6 +108,7 @@ def main(config, smoke_test=False):
     name = 'conditional' if config.TEXT_CONDITIONING else 'unconditional'
     if smoke_test:
         name += '_smoke_test'
+    name += f'_{config.IMAGE_SIZE}'     # the size at the end: runs/conditional_32, runs/conditional_64, ...
     run_dir = config.RUNS_DIR / name
     run_dir.mkdir(parents=True, exist_ok=True)
     print(f'1. Experiment: {run_dir} (device: {device})')

@@ -1,7 +1,7 @@
 """Turns the control grids of a training (samples_epochXXX.png) into a GIF, with the epoch written on top.
 
-Run it with:  python make_training_gif.py runs/conditional
-The result is runs/conditional/training.gif: one frame per grid, in epoch order, to see how the training
+Run it with:  python make_training_gif.py runs/conditional_32
+The result is runs/conditional_32/training.gif: one frame per grid, in epoch order, to see how the training
 improves the images.
 """
 
@@ -21,7 +21,7 @@ def epoch_of(grid_file):
     """Read the epoch from the name of a grid.
 
     Args:
-        grid_file: path like runs/conditional/samples_epoch025.png.
+        grid_file: path like runs/conditional_32/samples_epoch025.png.
 
     Returns:
         The epoch as a number, e.g. 25 (numbers, not text: 1000 comes after 200).
@@ -51,7 +51,7 @@ def main(folder):
     """Collect the grids of one experiment and save them as training.gif in the same folder.
 
     Args:
-        folder: the folder of the experiment, e.g. runs/conditional.
+        folder: the folder of the experiment, e.g. runs/conditional_32.
     """
     grids = sorted(folder.glob('samples_epoch*.png'), key=epoch_of)
     if not grids:
@@ -65,6 +65,7 @@ def main(folder):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Turn the control grids of a training into a GIF.')
-    parser.add_argument('folder', nargs='?', type=Path, default=Config.RUNS_DIR / 'conditional',
-                        help='folder of the experiment (default: runs/conditional)')
+    default = Config.RUNS_DIR / f'conditional_{Config.IMAGE_SIZE}'
+    parser.add_argument('folder', nargs='?', type=Path, default=default,
+                        help=f'folder of the experiment (default: runs/{default.name})')
     main(parser.parse_args().folder)
