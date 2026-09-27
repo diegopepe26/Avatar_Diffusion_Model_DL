@@ -120,3 +120,12 @@ def test_gradient_reaches_the_text_encoder():
     # the loss of the UNet must train the text encoder too, down to the vectors of the words
     gradient = text_encoder.embedding.weight.grad
     assert gradient is not None and gradient.abs().sum() > 0
+
+
+def test_unet_refuses_images_of_the_wrong_size():
+    config = Config()
+    config.IMAGE_SIZE = 64
+    unet = UNet(config)
+    x_t, t, context, pad_mask = make_inputs(size=32)   # e.g. 32x32 images while IMAGE_SIZE is 64
+    with pytest.raises(ValueError):
+        unet(x_t, t, context, pad_mask)

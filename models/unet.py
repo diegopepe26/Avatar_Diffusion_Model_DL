@@ -129,6 +129,7 @@ class UNet(nn.Module):
         # cross-attention still at 16x16 and 8x8 and every bottom pixel still sees the whole image.
         # At 32x32 its layers do not exist: the network and its checkpoints stay as they were.
         self.outer_level = config.IMAGE_SIZE == 64
+        self.image_size = config.IMAGE_SIZE
         # time embedding: sin/cos of t (the same formula as the positions of the text), then a small MLP
         self.time_mlp = nn.Sequential(
             nn.Linear(c1, config.TIME_DIM),
@@ -170,6 +171,11 @@ class UNet(nn.Module):
         """
         if self.text_conditioning and context is None:
             raise ValueError('TEXT_CONDITIONING is True: the UNet needs the context of the TextEncoder')
+        if x_t.shape[-1] != self.image_size:
+            # otherwise the network runs anyway, with the wrong number of levels (e.g. IMAGE_SIZE changed on a
+            # Config object: the images folder images_32 was fixed when config.py was read)
+            raise ValueError(f'the images are {x_t.shape[-1]}x{x_t.shape[-1]} but IMAGE_SIZE is {self.image_size}: '
+                             f'change IMAGE_SIZE in config.py and run prepare_data.py')
         time = self.time_mlp(sinusoidal_embedding(t, self.base_channels))    # (B, TIME_DIM)
         x = self.conv_in(x_t)
         if self.outer_level:
