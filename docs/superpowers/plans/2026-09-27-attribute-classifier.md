@@ -14,7 +14,7 @@
 
 - Stile del progetto: classi e funzioni brevi, docstring con Args e Returns, commenti brevi in inglese che spiegano il perché, tutte le impostazioni in `config.py`, solo l'essenziale.
 - Classi numerate nell'ordine delle parole in `MAPPING`; le teste e le etichette seguono l'ordine degli attributi di `MAPPING` (face_color, hair_color, hair, glasses, facial_hair).
-- `CLASSIFIER_CHANNELS = (32, 64, 128)`, `CLASSIFIER_EPOCHS = 30`, `CLASSIFIER_LEARNING_RATE = 1e-3`; batch `BATCH_SIZE` (128); seed `SEED` (42).
+- `CLASSIFIER_CHANNELS = (32, 64, 128)`, `CLASSIFIER_EPOCHS = 30` (50 dopo la modifica del Task 3), `CLASSIFIER_LEARNING_RATE = 1e-3`; batch `BATCH_SIZE` (128); seed `SEED` (42).
 - Nessuna data augmentation. Nessuna ripresa dal checkpoint.
 - Il file dei pesi si chiama `classifier.pt` (mai `last.pt`), in `runs/classifier_<IMAGE_SIZE>/`.
 - `CartoonDataset.__getitem__` non cambia: `train.py` riceve ancora `(immagine, token)`.
@@ -331,6 +331,16 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 3: `train_classifier.py` e README
 
 Il training non ha un test automatico: l'utente non vuole test con mini-dataset finti. Si verifica lanciandolo sui dati veri a 32×32.
+
+> **Modifica decisa con l'utente durante l'esecuzione** (la spec è aggiornata). Il primo lancio, con il codice
+> qui sotto, ha fatto scattare la condizione di stop dello step 3: tutti e 5 giusti nel 97,5% del test ma solo
+> nell'88,7% delle OOD vere, con errori che seguono le coppie (dark → tan, blonde → altro colore, sunglasses →
+> glasses). L'utente ha scelto di addestrare il classificatore anche su metà delle immagini vere OOD e di portare
+> le epoche a 50. Nel codice finale: le OOD si mescolano con `torch.randperm` e un generatore con `SEED`; la prima
+> metà (868) si aggiunge al train del classificatore, la seconda (868) è la metà di controllo, su cui si misurano
+> `ood` e `ood_pairs`; `accuracy.json` ha in più `ood_train_images`; `CLASSIFIER_EPOCHS = 50` in `config.py`; il
+> README descrive la metà OOD. I conteggi attesi allo step 3 diventano: `ood.images` 868 e le coppie sulla metà di
+> controllo (569 e 330 con `SEED` = 42).
 
 **Files:**
 - Create: `train_classifier.py`

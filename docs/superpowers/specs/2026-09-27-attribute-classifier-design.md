@@ -25,8 +25,18 @@ Questo lavoro comprende la rete, lo script che la addestra e la misura della sua
   attributo costa pochissimo.
 - **Rischio di scorciatoia.** Nel train "dark" e "long" (e "blonde" e "sunglasses") non compaiono mai insieme, e
   la rete potrebbe imparare "se è dark, i capelli non sono long". La correlazione è nei dati, quindi nessuna
-  architettura la elimina da sola. Si controlla misurando l'accuratezza sulle immagini **vere** OOD. Se su una
-  coppia fosse bassa, le 5 reti separate restano un piano di riserva.
+  architettura la elimina da sola.
+- **Il classificatore si addestra anche su metà delle immagini vere OOD** (decisione presa dopo il primo training,
+  vedi sotto). Il primo training, solo sul train, indovinava tutti e 5 gli attributi nel 97,5% delle immagini vere
+  di test e solo nell'88,7% delle OOD (88,4% su "dark + long", 88,0% su "blonde + sunglasses"). Gli errori erano
+  proprio la scorciatoia: su "dark + long" 29 volte tan invece di dark e 14 volte medium invece di long; su
+  "blonde + sunglasses" 30 volte un altro colore invece di blonde e 40 volte occhiali normali o nessun occhiale
+  invece di sunglasses. Con quel giudice, sulle immagini generate OOD non si potrebbero distinguere gli errori del
+  modello di diffusione da quelli del giudice. Il classificatore è uno strumento di misura, come l'Inception del
+  FID, e non fa parte della generazione: la regola della traccia (combinazioni OOD assenti dal training) vale per
+  il modello di diffusione, che continua a non vederle mai. Le 1.736 immagini OOD si mescolano con `SEED` e si
+  dividono a metà: 868 si aggiungono al train del classificatore, le altre 868 servono a misurarne l'affidabilità
+  sulle combinazioni OOD. Lo split del modello di diffusione (`data/captions_*.csv`) non cambia.
 - **Un classificatore per risoluzione**, che segue `IMAGE_SIZE` come il resto del progetto: si addestra su
   `data/images_32/` o `data/images_64/` e si salva in `runs/classifier_32/` o `runs/classifier_64/`. Rimpicciolire
   le immagini a 64 per giudicarle a 32 cancellerebbe dettagli fini (la montatura degli occhiali); ingrandire quelle
@@ -36,8 +46,10 @@ Questo lavoro comprende la rete, lo script che la addestra e la misura della sua
   orizzontale non creerebbe combinazioni nuove, quindi non aiuterebbe sulle OOD. I cambi di colore sono esclusi in
   ogni caso, perché il colore è l'etichetta. L'overfitting si controlla nel `log.csv` (accuratezza su train e su
   val a ogni epoca): se le due si allontanano, se ne riparla.
-- **30 epoche, si tiene la versione migliore su val.** Il criterio è la percentuale di immagini di val con tutti e
-  5 gli attributi giusti. Test e OOD non si guardano mai durante il training.
+- **50 epoche, si tiene la versione migliore su val.** Il criterio è la percentuale di immagini di val con tutti e
+  5 gli attributi giusti. Test e la metà di controllo delle OOD non si guardano mai durante il training. Erano 30:
+  nel primo training la curva su val andava su e giù (68% all'epoca 23) e la versione migliore era l'ultima, quindi
+  il training non era ancora stabile.
 - **Il file si chiama `classifier.pt`, non `last.pt`**, altrimenti la demo (`run_folders` in `generate.py`) lo
   mostrerebbe tra gli esperimenti di diffusione.
 - **Nessuna ripresa dal checkpoint.** Il training dura pochi minuti: se si interrompe, si rilancia da capo e i file
@@ -91,21 +103,26 @@ generate nel pezzo successivo, si misura così esattamente nello stesso modo.
 
 `python train_classifier.py`, dopo `prepare_data.py`. Lavora alla risoluzione di `IMAGE_SIZE`.
 
-1. Seed fisso (`SEED` = 42), device GPU se c'è. Legge train e val con `CartoonDataset`.
+1. Seed fisso (`SEED` = 42), device GPU se c'è. Legge train, val, test e OOD con `CartoonDataset`. Mescola le
+   immagini OOD con un generatore inizializzato con `SEED` e le divide a metà: la prima metà (868) si aggiunge al
+   train del classificatore (5.754 + 868 = 6.622 immagini), la seconda (868) è la metà di controllo.
 2. `AttributeClassifier`, AdamW con learning rate `CLASSIFIER_LEARNING_RATE` = 10⁻³ costante, batch `BATCH_SIZE`
    = 128, immagini mescolate a ogni epoca.
 3. La loss è la somma delle 5 cross-entropy, con lo stesso peso.
-4. Per `CLASSIFIER_EPOCHS` = 30 epoche:
-   - una passata sul train;
-   - `measure_accuracy` su tutto il train e su val (in `eval()`, quindi le due accuratezze sono confrontabili);
+4. Per `CLASSIFIER_EPOCHS` = 50 epoche:
+   - una passata sul train del classificatore (train + metà OOD);
+   - `measure_accuracy` su tutto il train del classificatore e su val (in `eval()`, quindi le due accuratezze sono
+     confrontabili);
    - una riga in `log.csv`: `epoch, train_loss, train_accuracy, val_accuracy` (le accuratezze sono il valore
      `all`); `train_loss` è la media delle loss dell'epoca;
    - una riga nel terminale con gli stessi numeri e il tempo;
    - se `val_accuracy` è strettamente maggiore della migliore finora, salva `classifier.pt` (a parità resta la
      versione più vecchia).
-5. Alla fine ricarica la versione migliore, la misura su val, test e OOD e scrive `accuracy.json`.
+5. Alla fine ricarica la versione migliore, la misura su val, test e sulla metà di controllo delle OOD e scrive
+   `accuracy.json`.
 
-Il tempo stimato è di circa un minuto a 32×32 sulla RTX 4060 e di pochi minuti a 64×64.
+Il primo training (30 epoche) è durato circa 30 secondi a 32×32 sulla RTX 4060; con 50 epoche e 868 immagini in
+più si stima circa un minuto, qualche minuto a 64×64.
 
 ### I file in `runs/classifier_<IMAGE_SIZE>/`
 
@@ -120,20 +137,23 @@ Il tempo stimato è di circa un minuto a 32×32 sulla RTX 4060 e di pochi minuti
 ```json
 {
   "epoch": 23,
+  "ood_train_images": 868,
   "val":  {"face_color": 0.99, "hair_color": 0.99, "hair": 0.97, "glasses": 0.99, "facial_hair": 0.99, "all": 0.95, "images": 1255},
   "test": {"...": "come val", "images": 1255},
-  "ood":  {"...": "come val", "images": 1736},
+  "ood":  {"...": "come val", "images": 868},
   "ood_pairs": {
-    "dark + long":         {"...": "come val", "images": 1120},
-    "blonde + sunglasses": {"...": "come val", "images": 682}
+    "dark + long":         {"...": "come val", "images": 560},
+    "blonde + sunglasses": {"...": "come val", "images": 341}
   }
 }
 ```
 
-I numeri qui sono solo un esempio. Ogni gruppo ha i 5 attributi, `all` e il numero di immagini. I gruppi di
-`ood_pairs` si prendono dalla colonna `ood_pair` della tabella OOD (il nome della coppia è quello di
-`summary.json`, le parole unite da " + "). 66 immagini contengono entrambe le coppie e contano in tutti e due i
-gruppi, per questo 1.120 + 682 = 1.802 è più di 1.736.
+I numeri qui sono solo un esempio (anche quelli delle coppie: dipendono da come cade la divisione a metà). Ogni
+gruppo ha i 5 attributi, `all` e il numero di immagini. `ood` e `ood_pairs` sono misurati **solo sulla metà di
+controllo** delle immagini OOD, quella che il classificatore non ha visto; `ood_train_images` è il numero di
+immagini OOD usate nel suo training. I gruppi di `ood_pairs` si prendono dalla colonna `ood_pair` della tabella OOD
+(il nome della coppia è quello di `summary.json`, le parole unite da " + "). Le immagini che contengono entrambe le
+coppie (66 in tutto lo split OOD) contano in tutti e due i gruppi.
 
 Questi numeri sono il "tetto" della metrica di condizionamento. Se il classificatore riconosce il 99% delle
 "dark + long" vere e solo il 70% di quelle generate, gli errori sono quasi tutti del modello di diffusione. Se sulle
@@ -142,7 +162,7 @@ vere arrivasse solo al 90%, una parte degli errori sulle generate potrebbe esser
 
 ## Nuove impostazioni in `config.py`
 
-Una sezione "Attribute classifier" con `CLASSIFIER_CHANNELS = (32, 64, 128)`, `CLASSIFIER_EPOCHS = 30` e
+Una sezione "Attribute classifier" con `CLASSIFIER_CHANNELS = (32, 64, 128)`, `CLASSIFIER_EPOCHS = 50` e
 `CLASSIFIER_LEARNING_RATE = 1e-3`. Il batch riusa `BATCH_SIZE`.
 
 ## Vincoli di stile
