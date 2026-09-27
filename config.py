@@ -116,6 +116,11 @@ class Config:
     SMOKE_TEST_SAMPLE_EVERY = 1000    # a control grid every 1000 epochs
     SMOKE_TEST_CHECKPOINT_EVERY = 100 # validation + checkpoint every 100 epochs: ~20 min instead of ~2.5 h
 
+    # ---- Attribute classifier (python train_classifier.py) ----
+    CLASSIFIER_CHANNELS = (32, 64, 128)  # channels of the three blocks; the image halves after each block
+    CLASSIFIER_EPOCHS = 30               # the best epoch on val is kept
+    CLASSIFIER_LEARNING_RATE = 1e-3      # AdamW, constant
+
     def to_dict(self):
         """Collect the settings that decide the data, to save them next to it.
 
