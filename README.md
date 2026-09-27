@@ -75,6 +75,8 @@ RTX 4060 Laptop. Set `IMAGE_SIZE = 32` to go back.
 | `models/sampling.py` | `sample`: from pure noise to images (DDPM Algorithm 2), classifier-free guidance, seed |
 | `train.py` | the training (DDPM Algorithm 1): loss, EMA, validation, control grids, checkpoint and resume |
 | `make_training_gif.py` | the control grids of a training in one GIF, with the epoch written on top |
+| `generate.py` | load a trained experiment (settings and EMA weights from its checkpoint) and generate one image per seed |
+| `app.py` | web demo (Gradio): attributes from menus, seed, number of images, guidance, experiment; shows and saves the images |
 
 ## Use in training
 
@@ -136,6 +138,19 @@ must learn them by heart. 8000 epochs of one step each, validation and checkpoin
 minutes on an RTX 4060 Laptop. Every 1000 epochs a grid: the first row shows 8 real training images, the two rows
 below show images generated from their captions, which must look more and more like the first row. The train loss
 goes down a lot; the validation loss goes up after a while (the model memorizes, it does not generalize: expected).
+
+## Demo
+
+```bash
+python app.py            # then open the address it prints, e.g. http://127.0.0.1:7860
+```
+
+A web page: choose the experiment (the folders of `runs/` with a checkpoint), the five attributes, the seed of
+the first image, the number of images and the guidance, then press **Generate**. The prompt is composed from the
+attributes with the training template, and a warning appears for the held-out combinations (OOD). Every image
+has its own seed (the next ones get seed + 1, + 2, ...): the same prompt and seed always give the same image.
+With the box checked, the images are saved in `runs/<experiment>/generated/`. One image takes about 19 s at
+32x32 on an RTX 4060 Laptop. On Colab, `python app.py --share` also prints a public link.
 
 ## Tests
 
