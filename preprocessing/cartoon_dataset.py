@@ -12,18 +12,21 @@ from preprocessing.vocabulary import Vocabulary
 class CartoonDataset(Dataset):
     """Images (normalized to [-1, 1]) and caption ids of one split."""
 
-    def __init__(self, config, split):
-        """Load the table, the vocabulary and all the images of one split.
+    def __init__(self, config, split, limit=None):
+        """Load the table, the vocabulary and the images of one split.
 
         Args:
             config: the project Config (uses SPLIT_FILES, VOCABULARY_FILE, RESIZED_IMAGES_DIR).
             split: 'train', 'val', 'test' or 'ood'.
+            limit: keep only the first rows of the split (e.g. 64 for the smoke test); None = all of them.
         """
         if split not in config.SPLIT_FILES:
             raise ValueError(f"split must be one of {list(config.SPLIT_FILES)}, not '{split}'")
 
         # keep_default_na=False: no word is ever read as a missing value
         self.table = pd.read_csv(config.SPLIT_FILES[split], keep_default_na=False)
+        if limit is not None:
+            self.table = self.table.head(limit)    # only these images are read from the disk
         self.vocabulary = Vocabulary(config)
         self.vocabulary.load(config.VOCABULARY_FILE)
 

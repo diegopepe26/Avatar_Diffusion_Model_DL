@@ -15,7 +15,7 @@ import time
 
 import torch
 import torch.nn.functional as F
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader
 
 from config import Config
 from models.diffusion import DiffusionModel
@@ -113,11 +113,9 @@ def main(config, smoke_test=False):
     run_dir.mkdir(parents=True, exist_ok=True)
     print(f'1. Experiment: {run_dir} (device: {device})')
 
-    # 2. The data prepared by prepare_data.py
-    train = CartoonDataset(config, 'train')
+    # 2. The data prepared by prepare_data.py (the smoke test reads only its first images from the disk)
+    train = CartoonDataset(config, 'train', limit=config.SMOKE_TEST_IMAGES if smoke_test else None)
     vocabulary = train.vocabulary
-    if smoke_test:
-        train = Subset(train, range(config.SMOKE_TEST_IMAGES))    # only the first images
     val = CartoonDataset(config, 'val')
     train_loader = DataLoader(train, batch_size=config.BATCH_SIZE, shuffle=True)
     val_loader = DataLoader(val, batch_size=config.BATCH_SIZE)
