@@ -42,11 +42,18 @@ All the settings are in `config.py`. The results go to `data/` (not in the repos
 | `captions.csv` | all the images: words, original values, caption |
 | `captions_train.csv`, `captions_val.csv`, `captions_test.csv` | in-distribution split (test = ordinary test) |
 | `captions_ood.csv` | held-out combinations, column `ood_pair` says which one |
-| `images_32/` | the images at 32x32 on a white background (values 0-255) |
+| `images_32/` | the images at 32x32 on a white background (values 0-255); `images_64/` with `IMAGE_SIZE = 64` |
 | `vocabulary.json` | vocabulary built from the train captions only |
 | `config.json` | the settings used, for the report |
 | `summary.json` | numbers for the report: split sizes, held-out pairs, attributes in train |
 | `preview.png` | the first 64 images |
+
+**Images at 64x64.** Set `IMAGE_SIZE = 64` in `config.py` (in the file, not on a `Config` object in a notebook:
+the images folder is chosen when `config.py` is read) and run `python prepare_data.py` again: it writes
+`data/images_64/` next to `images_32/`, with the same captions, split and vocabulary (`preview.png`,
+`config.json` and `summary.json` become the 64x64 ones). `python train.py` then trains the 64x64 UNet, which
+has one more level (64, 32, 16, 8), in `runs/conditional_64/`: about 4 hours with batch 128 (6.4 GB) on an
+RTX 4060 Laptop. Set `IMAGE_SIZE = 32` to go back.
 
 ## Code
 

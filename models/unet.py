@@ -117,7 +117,8 @@ class UNet(nn.Module):
 
     def __init__(self, config):
         """Args:
-            config: the project Config (uses UNET_CHANNELS, TIME_DIM, TEXT_CONDITIONING and the block settings).
+            config: the project Config (uses IMAGE_SIZE, UNET_CHANNELS, TIME_DIM, TEXT_CONDITIONING and the
+                block settings).
         """
         super().__init__()
         if config.IMAGE_SIZE not in (32, 64):
@@ -167,7 +168,7 @@ class UNet(nn.Module):
             pad_mask: (B, L) bool from the TextEncoder, True where the token is <pad>.
 
         Returns:
-            (B, 3, H, W) predicted noise.
+            (B, 3, IMAGE_SIZE, IMAGE_SIZE) predicted noise.
         """
         if self.text_conditioning and context is None:
             raise ValueError('TEXT_CONDITIONING is True: the UNet needs the context of the TextEncoder')
