@@ -9,6 +9,20 @@ from preprocessing.image_preprocessor import ImagePreprocessor
 from preprocessing.vocabulary import Vocabulary
 
 
+def attribute_labels(words, config):
+    """Turn the five words of an avatar into the numbers of their classes, the answers of the classifier.
+
+    Args:
+        words: {attribute: word}, e.g. {'face_color': 'tan', ...}; a row of the captions table works too.
+        config: the project Config (uses MAPPING).
+
+    Returns:
+        List of 5 integers in the order of MAPPING: the position of each word in its list,
+        e.g. tan, black, long, no glasses, a beard -> [1, 3, 3, 2, 0].
+    """
+    return [list(groups).index(words[attribute]) for attribute, groups in config.MAPPING.items()]
+
+
 class CartoonDataset(Dataset):
     """Images (normalized to [-1, 1]) and caption ids of one split."""
 
@@ -16,7 +30,7 @@ class CartoonDataset(Dataset):
         """Load the table, the vocabulary and the images of one split.
 
         Args:
-            config: the project Config (uses SPLIT_FILES, VOCABULARY_FILE, RESIZED_IMAGES_DIR).
+            config: the project Config (uses SPLIT_FILES, VOCABULARY_FILE, RESIZED_IMAGES_DIR, MAPPING).
             split: 'train', 'val', 'test' or 'ood'.
             limit: keep only the first rows of the split (e.g. 64 for the smoke test); None = all of them.
         """
@@ -34,6 +48,8 @@ class CartoonDataset(Dataset):
         self.images = [ImagePreprocessor.normalize(Image.open(config.RESIZED_IMAGES_DIR / name).convert('RGB'))
                        for name in self.table['file']]
         self.tokens = [torch.tensor(self.vocabulary.encode(caption)) for caption in self.table['caption']]
+        # the five words of every image as class numbers (N, 5): the answers the attribute classifier must give
+        self.labels = torch.tensor([attribute_labels(row, config) for _, row in self.table.iterrows()])
 
     def __len__(self):
         """Returns: number of images in the split."""
