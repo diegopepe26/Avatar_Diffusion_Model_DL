@@ -6,10 +6,12 @@ classifier), the quality (FID and KID, with real-vs-real references), the divers
 the parameters, the sampling time and the GPU memory. Everything goes to runs/<experiment>/evaluation/.
 """
 
+import json
 import time
 
 import torch
 
+from models.attribute_classifier import load_classifier
 from models.sampling import sample
 
 
@@ -35,6 +37,51 @@ def from_pixels(pixels):
         (N, 3, H, W) float in [-1, 1].
     """
     return pixels.float() / 127.5 - 1
+
+
+def check_run(run_dir, config):
+    """Stop before the long generation if the experiment cannot be evaluated.
+
+    Args:
+        run_dir: folder of the experiment, e.g. runs/conditional_32.
+        config: the project Config (uses IMAGE_SIZE: the real images are read from data/images_<IMAGE_SIZE>).
+
+    Returns:
+        The side of the images of the experiment (32 or 64).
+    """
+    checkpoint_file = run_dir / 'last.pt'
+    if not checkpoint_file.exists():
+        raise ValueError(f'No last.pt in {run_dir}: train the experiment first with train.py')
+    image_size = torch.load(checkpoint_file, map_location='cpu', weights_only=False)['settings']['IMAGE_SIZE']
+    # the generated images are compared with the real ones of data/images_<IMAGE_SIZE of config.py>
+    if image_size != config.IMAGE_SIZE:
+        raise ValueError(f'{run_dir.name} generates {image_size}x{image_size} images but config.py has '
+                         f'IMAGE_SIZE = {config.IMAGE_SIZE}: set IMAGE_SIZE = {image_size} in config.py')
+    return image_size
+
+
+def load_judge(config, image_size):
+    """The attribute classifier of the size of the experiment, and how often it is right on the real images.
+
+    Args:
+        config: the project Config (uses RUNS_DIR).
+        image_size: side of the generated images (32 or 64).
+
+    Returns:
+        (AttributeClassifier in eval() on the GPU if there is one, the content of its accuracy.json).
+    """
+    classifier = load_classifier(config, image_size)
+    if classifier is None:
+        raise ValueError(f'No attribute classifier for {image_size}x{image_size}: '
+                         f'run train_classifier.py with IMAGE_SIZE = {image_size}')
+    folder = config.RUNS_DIR / f'classifier_{image_size}'
+    # an interrupted training overwrites classifier.pt at its first epoch but writes accuracy.json only at the end
+    epoch = torch.load(folder / 'classifier.pt', map_location='cpu')['epoch']
+    report = json.loads((folder / 'accuracy.json').read_text()) if (folder / 'accuracy.json').exists() else {}
+    if report.get('epoch') != epoch:
+        raise ValueError(f'{folder}: accuracy.json is not of the training of classifier.pt (epoch {epoch}): '
+                         'run train_classifier.py again')
+    return classifier, report
 
 
 def generate_images(model, scheduler, config, tokens, first_seed):
