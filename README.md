@@ -76,8 +76,8 @@ RTX 4060 Laptop. Set `IMAGE_SIZE = 32` to go back.
 | `train.py` | the training (DDPM Algorithm 1): loss, EMA, validation, control grids, checkpoint and resume |
 | `make_training_gif.py` | the control grids of a training in one GIF, with the epoch written on top |
 | `generate.py` | load a trained experiment (settings and EMA weights from its checkpoint) and generate one image per seed |
-| `app.py` | web demo (Gradio): attributes from menus, seed, number of images, guidance, experiment; shows and saves the images |
-| `models/attribute_classifier.py` | `AttributeClassifier`: small CNN, one head per attribute; `measure_accuracy`: share of right words, per attribute and all five together |
+| `app.py` | web demo (Gradio): attributes from menus, seed, number of images, guidance, experiment; shows and saves the images, with a table of what the attribute classifier sees in each one |
+| `models/attribute_classifier.py` | `AttributeClassifier`: small CNN, one head per attribute; `load_classifier`: the trained classifier of one image size; `predict`: the words it sees, as class numbers; `measure_accuracy`: share of right words, per attribute and all five together |
 | `train_classifier.py` | trains the attribute classifier on the real training images and half of the real OOD images, keeps the best epoch on val, measures it on the real images it has never seen |
 
 ## Use in training
@@ -154,6 +154,12 @@ has its own seed (the next ones get seed + 1, + 2, ...): the same prompt, seed a
 same image. With the box checked, the images are saved in `runs/<experiment>/generated/`, named after the
 attributes, the guidance and the seed. One image takes about 19 s at 32x32 on an RTX 4060 Laptop. On Colab,
 `python app.py --share` also prints a public link.
+
+Under the images, a table shows what the attribute classifier (see below) sees in every image: ✓ where it is the
+word chosen in the menu, ✗ and the word it sees where it is not; the caption of every image says how many of the
+five words are right (e.g. `seed 7 · 4/5`). The classifier is the one of the size of the experiment
+(`runs/classifier_32/` for a 32x32 run): without it the images are shown without the table, and the page says to
+run `train_classifier.py`.
 
 ## Attribute classifier
 

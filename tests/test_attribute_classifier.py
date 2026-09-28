@@ -6,7 +6,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from config import Config
-from models.attribute_classifier import AttributeClassifier, measure_accuracy
+from models.attribute_classifier import AttributeClassifier, load_classifier, measure_accuracy
 from preprocessing.cartoon_dataset import attribute_labels
 
 
@@ -49,3 +49,18 @@ def test_measure_accuracy_counts_an_image_only_with_all_five_right():
     assert accuracy['hair'] == 0.5
     assert all(accuracy[attribute] == 1 for attribute in ['face_color', 'hair_color', 'glasses', 'facial_hair'])
     assert accuracy['all'] == 0.5                # one image out of two has all five right
+
+
+def test_load_classifier_rebuilds_the_saved_network(tmp_path, monkeypatch):
+    monkeypatch.setattr(Config, 'RUNS_DIR', tmp_path)          # instead of runs/
+    assert load_classifier(Config(), 32) is None               # not trained yet at this size
+    config = Config()
+    config.CLASSIFIER_CHANNELS = (8, 16, 32)                   # not the channels of config.py
+    saved = AttributeClassifier(config)
+    (tmp_path / 'classifier_32').mkdir()
+    torch.save({'weights': saved.state_dict(), 'settings': {'IMAGE_SIZE': 32, 'CLASSIFIER_CHANNELS': (8, 16, 32)},
+                'epoch': 1, 'val_accuracy': 0.5}, tmp_path / 'classifier_32' / 'classifier.pt')
+    loaded = load_classifier(Config(), 32)
+    assert loaded.heads['hair'].in_features == 32              # rebuilt with the saved channels
+    assert torch.equal(loaded.heads['hair'].weight.cpu(), saved.heads['hair'].weight)
+    assert not loaded.training                                 # ready to judge: eval()

@@ -15,3 +15,12 @@ def test_file_names_keep_the_guidance():
     assert app.file_name(words, 7, 3.0, True) == 'pale_long_blonde_no-glasses_a-beard_guidance3_seed7.png'
     assert app.file_name(words, 7, 5.5, True) != app.file_name(words, 7, 3.0, True)   # no overwriting
     assert app.file_name(words, 7, 3.0, False) == 'unconditional_seed7.png'           # baseline: no text
+
+
+def test_verdict_table_marks_the_words_the_classifier_does_not_see():
+    # the menus: hair length before hair color
+    chosen = {'face_color': 'dark', 'hair': 'long', 'hair_color': 'black', 'glasses': 'glasses', 'facial_hair': 'a beard'}
+    # the classifier: the order of MAPPING (hair color before hair length), wrong only on the hair length
+    seen = {'face_color': 'dark', 'hair_color': 'black', 'hair': 'medium', 'glasses': 'glasses', 'facial_hair': 'a beard'}
+    table = app.verdict_table(chosen, [seen], [7])
+    assert table.splitlines()[-1] == '| 7 | ✓ dark | ✗ medium | ✓ black | ✓ glasses | ✓ a beard |'

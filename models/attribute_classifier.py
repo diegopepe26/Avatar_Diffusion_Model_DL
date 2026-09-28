@@ -5,6 +5,8 @@ real OOD images (the diffusion model never sees them), then frozen, it reads the
 whether they show the words of their prompt.
 """
 
+import copy
+
 import torch
 from torch import nn
 
@@ -44,6 +46,53 @@ class AttributeClassifier(nn.Module):
         return {attribute: head(features) for attribute, head in self.heads.items()}
 
 
+def load_classifier(config, image_size):
+    """Rebuild the trained classifier of one image size, with the settings and the weights of its classifier.pt.
+
+    Args:
+        config: the project Config (uses RUNS_DIR, MAPPING).
+        image_size: side of the images to judge (32 or 64): it reads runs/classifier_<image_size>/classifier.pt.
+
+    Returns:
+        AttributeClassifier in eval() on the GPU if there is one, or None if it has not been trained at this size.
+    """
+    checkpoint_file = config.RUNS_DIR / f'classifier_{image_size}' / 'classifier.pt'
+    if not checkpoint_file.exists():
+        return None
+    checkpoint = torch.load(checkpoint_file, map_location='cpu')
+    # the channels of the saved network, not those of config.py: they may have changed since the training
+    network_config = copy.copy(config)
+    network_config.CLASSIFIER_CHANNELS = checkpoint['settings']['CLASSIFIER_CHANNELS']
+    classifier = AttributeClassifier(network_config)
+    classifier.load_state_dict(checkpoint['weights'])
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    return classifier.to(device).eval()
+
+
+def predict(classifier, images, config):
+    """The words the classifier sees in some images, as class numbers.
+
+    Args:
+        classifier: AttributeClassifier (it is left in eval()).
+        images: (N, 3, H, W) in [-1, 1], on any device: N = number of images, 3 = RGB colors,
+            H = W = side of the images (IMAGE_SIZE).
+        config: the project Config (uses BATCH_SIZE, MAPPING).
+
+    Returns:
+        (N, 5) class numbers on the CPU, one per attribute in the order of MAPPING,
+        e.g. [1, 3, 3, 2, 0] = tan, black, long, no glasses, a beard.
+    """
+    classifier.eval()     # BatchNorm with the statistics of the real training images
+    device = next(classifier.parameters()).device
+    answers = []          # one (images in the batch, 5) tensor per batch
+    with torch.no_grad():
+        for start in range(0, len(images), config.BATCH_SIZE):
+            logits = classifier(images[start:start + config.BATCH_SIZE].to(device))
+            # the word with the highest score, for each attribute
+            answers.append(torch.stack([logits[attribute].argmax(dim=1) for attribute in config.MAPPING], dim=1).cpu())
+    return torch.cat(answers)
+
+
 def measure_accuracy(classifier, images, labels, config):
     """Share of right answers of the classifier, for each attribute and for all five together.
 
@@ -61,16 +110,7 @@ def measure_accuracy(classifier, images, labels, config):
     Returns:
         {attribute: fraction of right answers, ..., 'all': fraction of images with all five right}.
     """
-    classifier.eval()     # BatchNorm with the statistics of the real training images
-    device = next(classifier.parameters()).device
-    right = []            # one (images in the batch, 5) tensor per batch: True where the word is right
-    with torch.no_grad():
-        for start in range(0, len(images), config.BATCH_SIZE):
-            logits = classifier(images[start:start + config.BATCH_SIZE].to(device))
-            # the word with the highest score, for each attribute: (images in the batch, 5)
-            answers = torch.stack([logits[attribute].argmax(dim=1) for attribute in config.MAPPING], dim=1)
-            right.append(answers.cpu() == labels[start:start + config.BATCH_SIZE].cpu())
-    right = torch.cat(right)
+    right = predict(classifier, images, config) == labels.cpu()   # (N, 5): True where the word is right
     accuracy = {attribute: right[:, i].float().mean().item() for i, attribute in enumerate(config.MAPPING)}
     accuracy['all'] = right.all(dim=1).float().mean().item()
     return accuracy
