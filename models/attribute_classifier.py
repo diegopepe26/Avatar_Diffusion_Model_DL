@@ -1,7 +1,8 @@
 """Attribute classifier: a small CNN that tells the five words of an avatar (skin, hair color, hair, glasses, beard).
 
-It is the judge of the conditioning metric: trained from scratch on the real training images, then frozen,
-it reads the generated images and says whether they show the words of their prompt.
+It is the judge of the conditioning metric: trained from scratch on the real training images and on half of the
+real OOD images (the diffusion model never sees them), then frozen, it reads the generated images and says
+whether they show the words of their prompt.
 """
 
 import torch
@@ -31,10 +32,12 @@ class AttributeClassifier(nn.Module):
 
     def forward(self, images):
         """Args:
-            images: (B, 3, H, W) in [-1, 1], with H = W = 32 or 64.
+            images: (B, 3, H, W) in [-1, 1]: B = images in the batch, 3 = RGB colors,
+                H = W = side of the images (IMAGE_SIZE: 32 or 64).
 
         Returns:
-            {attribute: (B, number of words) logits}, in the order of MAPPING.
+            {attribute: (B, number of words) logits}, in the order of MAPPING: one score per word for every image,
+            e.g. logits['hair'] is (B, 4), the scores of balding, short, medium and long.
         """
         # the mean over all the pixels: the same number of values at 32x32 and at 64x64
         features = self.features(images).mean(dim=(2, 3))
@@ -49,8 +52,10 @@ def measure_accuracy(classifier, images, labels, config):
 
     Args:
         classifier: AttributeClassifier (it is left in eval()).
-        images: (N, 3, H, W) in [-1, 1], on any device.
-        labels: (N, 5) class numbers in the order of MAPPING (see attribute_labels).
+        images: (N, 3, H, W) in [-1, 1], on any device: N = number of images (e.g. 1255 for val),
+            3 = RGB colors, H = W = side of the images (IMAGE_SIZE).
+        labels: (N, 5) the right class numbers of every image, one per attribute in the order of MAPPING
+            (see attribute_labels), e.g. [1, 3, 3, 2, 0] = tan, black, long, no glasses, a beard.
         config: the project Config (uses BATCH_SIZE, MAPPING).
 
     Returns:
@@ -58,11 +63,11 @@ def measure_accuracy(classifier, images, labels, config):
     """
     classifier.eval()     # BatchNorm with the statistics of the real training images
     device = next(classifier.parameters()).device
-    right = []            # one (batch, 5) tensor per batch: True where the word is right
+    right = []            # one (images in the batch, 5) tensor per batch: True where the word is right
     with torch.no_grad():
         for start in range(0, len(images), config.BATCH_SIZE):
             logits = classifier(images[start:start + config.BATCH_SIZE].to(device))
-            # the word with the highest score, for each attribute: (batch, 5)
+            # the word with the highest score, for each attribute: (images in the batch, 5)
             answers = torch.stack([logits[attribute].argmax(dim=1) for attribute in config.MAPPING], dim=1)
             right.append(answers.cpu() == labels[start:start + config.BATCH_SIZE].cpu())
     right = torch.cat(right)

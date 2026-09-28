@@ -48,7 +48,8 @@ class CartoonDataset(Dataset):
         self.images = [ImagePreprocessor.normalize(Image.open(config.RESIZED_IMAGES_DIR / name).convert('RGB'))
                        for name in self.table['file']]
         self.tokens = [torch.tensor(self.vocabulary.encode(caption)) for caption in self.table['caption']]
-        # the five words of every image as class numbers (N, 5): the answers the attribute classifier must give
+        # the five words of every image as class numbers, (N, 5) with N = images of the split:
+        # the answers the attribute classifier must give
         self.labels = torch.tensor([attribute_labels(row, config) for _, row in self.table.iterrows()])
 
     def __len__(self):

@@ -23,8 +23,8 @@ def classifier_loss(logits, labels, config):
     """Sum of the cross-entropies of the five heads, all with the same weight.
 
     Args:
-        logits: {attribute: (B, number of words)}, from AttributeClassifier.
-        labels: (B, 5) class numbers in the order of MAPPING.
+        logits: {attribute: (B, number of words)}, from AttributeClassifier: B = images in the batch.
+        labels: (B, 5) the right class numbers of every image, one per attribute in the order of MAPPING.
         config: the project Config (uses MAPPING).
 
     Returns:
