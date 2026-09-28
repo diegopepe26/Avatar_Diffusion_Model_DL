@@ -23,4 +23,5 @@ def test_verdict_table_marks_the_words_the_classifier_does_not_see():
     # the classifier: the order of MAPPING (hair color before hair length), wrong only on the hair length
     seen = {'face_color': 'dark', 'hair_color': 'black', 'hair': 'medium', 'glasses': 'glasses', 'facial_hair': 'a beard'}
     table = app.verdict_table(chosen, [seen], [7])
-    assert table.splitlines()[-1] == '| 7 | ✓ dark | ✗ medium | ✓ black | ✓ glasses | ✓ a beard |'
+    ok, no = '<span class="ok">✓</span>', '<span class="no">✗</span>'     # green tick, red cross
+    assert table.splitlines()[-1] == f'| 7 | {ok} dark | {no} medium | {ok} black | {ok} glasses | {ok} a beard |'
