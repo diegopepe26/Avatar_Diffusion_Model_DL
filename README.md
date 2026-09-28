@@ -79,6 +79,7 @@ RTX 4060 Laptop. Set `IMAGE_SIZE = 32` to go back.
 | `app.py` | web demo (Gradio): attributes from menus, seed, number of images, guidance, experiment; shows and saves the images, with a table of what the attribute classifier sees in each one |
 | `models/attribute_classifier.py` | `AttributeClassifier`: small CNN, one head per attribute; `load_classifier`: the trained classifier of one image size; `predict`: the words it sees, as class numbers; `measure_accuracy`: share of right words, per attribute and all five together |
 | `train_classifier.py` | trains the attribute classifier on the real training images and half of the real OOD images, keeps the best epoch on val, measures it on the real images it has never seen |
+| `evaluate.py` | evaluation of an experiment on the test and OOD captions: conditioning (attribute classifier), FID and KID with real-vs-real references, diversity across seeds, parameters, sampling time and GPU memory |
 
 ## Use in training
 
@@ -189,6 +190,35 @@ half) measures how often it is right on the held-out combinations.
 
 The weights are in `classifier.pt` and not in `last.pt`, so the demo does not list the classifier among the
 experiments. The training does not resume: run it again to start from scratch.
+
+## Evaluation
+
+After `train.py` (the experiment) and `train_classifier.py` (the judge of its image size):
+
+```bash
+python evaluate.py runs/conditional_32
+```
+
+It generates one image per row of the ordinary test (1,255) and of the held-out combinations (OOD, 1,736) with
+guidance `GUIDANCE_SCALE`, in groups of `BATCH_SIZE` images, each group with its own seed, plus 16 images for each
+of the 8 `SAMPLE_PROMPTS`. About 80 minutes for `conditional_32` on an RTX 4060 Laptop (the baseline, without
+guidance, about half). The generated images are saved: a second run reads them and takes a few minutes; delete
+`evaluation/` to start again. `IMAGE_SIZE` in `config.py` must be the size of the experiment, because the generated
+images are compared with the real images of that size.
+
+Everything goes to `runs/<experiment>/evaluation/`:
+
+| File | Content |
+|---|---|
+| `evaluation.json` | conditioning (share of generated images with the words of their caption, per attribute and all five, on test, OOD and each held-out pair, next to the classifier on the real images), quality (FID and KID against the real images of the same split, and between two groups of real images), diversity (mean pixel distance over the pairs of images of the same prompt, generated and real), parameters, seconds per image (in a group and alone) and GPU memory |
+| `generated_test.pt`, `generated_ood.pt`, `generated_diversity.pt` | the generated images (values 0-255), with the seconds and the GPU memory of their generation |
+| `diversity.png` | the 16 images of each `SAMPLE_PROMPT`, two rows per prompt |
+| `disagreements_test.png`, `disagreements_ood.png` | the first 32 generated images with a word the classifier sees differently |
+| `disagreements_test.txt`, `disagreements_ood.txt` | one line per image of the grid: the caption and the words that differ |
+
+FID and KID use `torchmetrics` (torch-fidelity): the 2048 features of Inception-v3 (weights
+`pt_inception-2015-12-05`, downloaded at the first run, about 100 MB), with the images resized to 299x299; the KID
+is averaged over 100 random subsets of 500 images.
 
 ## Tests
 
