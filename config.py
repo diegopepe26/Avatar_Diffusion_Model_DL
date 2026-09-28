@@ -121,6 +121,12 @@ class Config:
     CLASSIFIER_EPOCHS = 50               # the best epoch on val is kept (with 30 the best was still the last one)
     CLASSIFIER_LEARNING_RATE = 1e-3      # AdamW, constant
 
+    # ---- Evaluation (python evaluate.py runs/<experiment>) ----
+    DIVERSITY_IMAGES = 16       # images per SAMPLE_PROMPT for the diversity across seeds
+    KID_SUBSETS = 100           # random subsets whose KIDs are averaged
+    KID_SUBSET_SIZE = 500       # images in every subset: the smallest group (half of the real OOD) has 868
+    DISAGREEMENTS_SHOWN = 32    # generated images with a wrong word shown in the grids
+
     def to_dict(self):
         """Collect the settings that decide the data, to save them next to it.
 
