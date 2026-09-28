@@ -10,6 +10,8 @@ import json
 import time
 
 import torch
+from torchmetrics.image.fid import FrechetInceptionDistance
+from torchmetrics.image.kid import KernelInceptionDistance
 
 from models.attribute_classifier import load_classifier
 from models.sampling import sample
@@ -134,3 +136,67 @@ def generate_or_load(path, model, scheduler, config, tokens, first_seed):
               'peak_memory_mb': torch.cuda.max_memory_allocated() / 2**20 if cuda else None}
     torch.save(result, path)
     return result
+
+
+def mean_pair_distance(images):
+    """Diversity of a group of images: the mean distance over all the pairs of different images.
+
+    The distance of two images is the mean of the absolute differences of their values, with the pixels in [0, 1]:
+    0 for two identical images, 1 between a black and a white one. N images make N * (N - 1) / 2 pairs.
+
+    Args:
+        images: (N, 3, H, W) float in [-1, 1]: N = number of images (at least 2), 3 = RGB colors,
+            H = W = side of the images.
+
+    Returns:
+        The mean distance over the pairs, a float.
+    """
+    pixels = ((images.float() + 1) / 2).flatten(1)                      # (N, 3 * H * W) in [0, 1]
+    # distance of every image with every other: (N, N), 0 on the diagonal (an image with itself)
+    distances = torch.cdist(pixels, pixels, p=1) / pixels.shape[1]
+    first, second = torch.triu_indices(len(pixels), len(pixels), offset=1)   # every pair once: first < second
+    return distances[first, second].mean().item()
+
+
+def disagreement_line(position, caption, asked, seen):
+    """One line of the disagreements file: the caption and the words the classifier sees differently.
+
+    Args:
+        position: number of the image in the grid (1 = top left, then left to right, top to bottom).
+        caption: the prompt of the image.
+        asked: {attribute: word} of the caption, in the order of MAPPING.
+        seen: {attribute: word} the classifier sees in the image.
+
+    Returns:
+        e.g. '5. a cartoon avatar with ... — hair: asked long, sees medium'.
+    """
+    wrong = [f'{attribute}: asked {asked[attribute]}, sees {seen[attribute]}'
+             for attribute in asked if seen[attribute] != asked[attribute]]
+    return f'{position}. {caption} — ' + '; '.join(wrong)
+
+
+def fid_kid(real, generated, config):
+    """FID and KID between two groups of images, on the 2048 Inception-v3 features (torchmetrics, torch-fidelity).
+
+    Args:
+        real, generated: (N, 3, H, W) float in [-1, 1]: N = number of images of each group (the two may differ),
+            3 = RGB colors, H = W = side of the images (resized to 299x299 inside the library).
+        config: the project Config (uses KID_SUBSETS, KID_SUBSET_SIZE, BATCH_SIZE, SEED).
+
+    Returns:
+        {'fid': float, 'kid_mean': float, 'kid_std': float, 'images': [real N, generated N]}.
+    """
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    # normalize=True: the images are given as floats in [0, 1]
+    fid = FrechetInceptionDistance(feature=2048, normalize=True).to(device)
+    kid = KernelInceptionDistance(feature=2048, subsets=config.KID_SUBSETS, subset_size=config.KID_SUBSET_SIZE,
+                                  normalize=True).to(device)
+    for images, is_real in [(real, True), (generated, False)]:
+        for start in range(0, len(images), config.BATCH_SIZE):
+            group = ((images[start:start + config.BATCH_SIZE].float() + 1) / 2).to(device)
+            fid.update(group, real=is_real)
+            kid.update(group, real=is_real)
+    torch.manual_seed(config.SEED)       # the random subsets of the KID
+    kid_mean, kid_std = kid.compute()
+    return {'fid': fid.compute().item(), 'kid_mean': kid_mean.item(), 'kid_std': kid_std.item(),
+            'images': [len(real), len(generated)]}

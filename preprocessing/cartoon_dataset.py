@@ -23,6 +23,19 @@ def attribute_labels(words, config):
     return [list(groups).index(words[attribute]) for attribute, groups in config.MAPPING.items()]
 
 
+def attribute_words(numbers, config):
+    """Inverse of attribute_labels: from the 5 class numbers back to the words.
+
+    Args:
+        numbers: 5 integers in the order of MAPPING, e.g. [1, 3, 3, 2, 0].
+        config: the project Config (uses MAPPING).
+
+    Returns:
+        {attribute: word}, e.g. {'face_color': 'tan', 'hair_color': 'black', 'hair': 'long', ...}.
+    """
+    return {attribute: list(groups)[number] for (attribute, groups), number in zip(config.MAPPING.items(), numbers)}
+
+
 class CartoonDataset(Dataset):
     """Images (normalized to [-1, 1]) and caption ids of one split."""
 

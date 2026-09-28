@@ -6,7 +6,7 @@ import pytest
 import torch
 
 from config import Config
-from evaluate import check_run, generate_images, generate_or_load, load_judge
+from evaluate import check_run, disagreement_line, generate_images, generate_or_load, load_judge, mean_pair_distance
 from models.attribute_classifier import AttributeClassifier
 from models.diffusion import DiffusionModel
 from models.noise_scheduler import NoiseScheduler
@@ -74,3 +74,16 @@ def test_load_judge_checks_that_accuracy_json_is_of_the_same_training(tmp_path, 
     (folder / 'accuracy.json').write_text(json.dumps({'epoch': 40}))
     classifier, report = load_judge(config, 32)
     assert report['epoch'] == 40 and not classifier.training
+
+
+def test_diversity_is_the_mean_over_all_the_pairs():
+    black, white = -torch.ones(3, 32, 32), torch.ones(3, 32, 32)
+    # three pairs: black-black 0, black-white 1, black-white 1
+    assert mean_pair_distance(torch.stack([black, black, white])) == pytest.approx(2 / 3)
+
+
+def test_disagreement_line_lists_only_the_wrong_words():
+    asked = {'face_color': 'dark', 'hair_color': 'black', 'hair': 'long', 'glasses': 'glasses', 'facial_hair': 'a beard'}
+    seen = dict(asked, hair='medium', glasses='no glasses')
+    assert disagreement_line(5, 'a cartoon avatar', asked, seen) == \
+        '5. a cartoon avatar — hair: asked long, sees medium; glasses: asked glasses, sees no glasses'

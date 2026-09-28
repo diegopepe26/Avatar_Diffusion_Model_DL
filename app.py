@@ -16,6 +16,7 @@ from config import Config
 from generate import generate, is_held_out, load_model, run_folders
 from models.attribute_classifier import load_classifier, predict
 from preprocessing.caption_generator import CaptionGenerator
+from preprocessing.cartoon_dataset import attribute_words
 from preprocessing.image_preprocessor import ImagePreprocessor
 
 # label in the page -> attribute of Config.MAPPING, in the order of the caption and of the file names
@@ -118,9 +119,7 @@ def on_generate(experiment, seed, count, guidance, save, *words):
     if classifiers[size] is not None:
         # the images as the classifier saw them in training: (count, 3, size, size) in [-1, 1]
         pixels = torch.stack([ImagePreprocessor.normalize(image) for image in images])
-        # class numbers -> words, in the order of MAPPING
-        seen = [{attribute: list(config.MAPPING[attribute])[number] for attribute, number in zip(config.MAPPING, row)}
-                for row in predict(classifiers[size], pixels, config).tolist()]
+        seen = [attribute_words(row, config) for row in predict(classifiers[size], pixels, config).tolist()]
         table = verdict_table(chosen, seen, seeds)
         captions = [f'{text} · {sum(found[a] == chosen[a] for a in chosen)}/5' for text, found in zip(captions, seen)]
 

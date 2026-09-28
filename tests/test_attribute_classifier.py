@@ -7,7 +7,7 @@ from torch.nn import functional as F
 
 from config import Config
 from models.attribute_classifier import AttributeClassifier, load_classifier, measure_accuracy
-from preprocessing.cartoon_dataset import attribute_labels
+from preprocessing.cartoon_dataset import attribute_labels, attribute_words
 
 
 def test_attribute_labels_follow_the_order_of_mapping():
@@ -15,6 +15,7 @@ def test_attribute_labels_follow_the_order_of_mapping():
              'facial_hair': 'a beard'}
     # the position of each word in its list of MAPPING: tan 1 (dark, tan, ...), black 3, long 3, no glasses 2, a beard 0
     assert attribute_labels(words, Config()) == [1, 3, 3, 2, 0]
+    assert attribute_words([1, 3, 3, 2, 0], Config()) == words      # and back
 
 
 class FixedAnswers(nn.Module):
