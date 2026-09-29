@@ -94,14 +94,16 @@ class Config:
 
     # ---- Training ----
     RUNS_DIR = ROOT / 'runs'          # one folder per experiment; on Colab point it to Google Drive
-    BATCH_SIZE = 128
+    # images per step (also the groups of train_classifier.py and evaluate.py): 64 at 64x64, where the doubled
+    # UNet on four times the pixels needs much more GPU memory
+    BATCH_SIZE = 64 if IMAGE_SIZE == 64 else 128
     LEARNING_RATE = 2e-4              # AdamW, constant, as in DDPM
     GRAD_CLIP = 1.0                   # largest norm of the gradient, as in DDPM
     EMA_DECAY = 0.999                 # average of the weights over the last ~1000 steps
     CAPTION_DROPOUT = 0.1             # share of empty captions, for classifier-free guidance
     EPOCHS = 500                      # ~22,000 steps, ~1.4 h on an RTX 4060 Laptop
     SAMPLE_EVERY = 25                 # epochs between two control grids (0 = never)
-    CHECKPOINT_EVERY = 1              # epochs between two validations + checkpoints (1 = every epoch = 45 steps)
+    CHECKPOINT_EVERY = 1              # epochs between two validations + checkpoints (1 = every epoch: 45 steps at 32x32)
     DETERMINISTIC = False             # True: two trainings from the same seed give exactly the same model (~30% slower)
     GUIDANCE_SCALE = 3.0              # strength of classifier-free guidance when generating
     SAMPLE_PROMPTS = [                # control grid: 4 captions seen in training, 4 held-out (OOD)
