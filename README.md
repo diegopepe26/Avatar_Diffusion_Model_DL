@@ -52,8 +52,10 @@ All the settings are in `config.py`. The results go to `data/` (not in the repos
 the images folder is chosen when `config.py` is read) and run `python prepare_data.py` again: it writes
 `data/images_64/` next to `images_32/`, with the same captions, split and vocabulary (`preview.png`,
 `config.json` and `summary.json` become the 64x64 ones). `python train.py` then trains the 64x64 UNet, which
-has one more level (64, 32, 16, 8), in `runs/conditional_64/`: about 4 hours with batch 128 (6.4 GB) on an
-RTX 4060 Laptop. Set `IMAGE_SIZE = 32` to go back.
+has one more level (64, 32, 16, 8), in `runs/conditional_64/`. At 64x64 `config.py` also doubles the channels
+(`UNET_CHANNELS = (128, 256, 512)`: about 24.9 million parameters instead of 6.1) and turns on the offset noise
+(`OFFSET_NOISE = 0.1`, see `diffusion_noise` in `train.py`): without them the smoke tests at 64x64 painted grey or
+tinted backgrounds and got some faces wrong. Set `IMAGE_SIZE = 32` to go back.
 
 ## Code
 

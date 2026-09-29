@@ -15,7 +15,7 @@ from models.noise_scheduler import NoiseScheduler
 from models.sampling import sample
 from preprocessing.image_preprocessor import ImagePreprocessor
 from preprocessing.vocabulary import Vocabulary
-from train import diffusion_loss, save_checkpoint, update_ema
+from train import diffusion_loss, diffusion_noise, save_checkpoint, update_ema
 
 CAPTIONS = [
     'a cartoon avatar with pale skin, long blonde hair, no glasses and a beard',
@@ -102,6 +102,17 @@ def test_diffusion_loss():
     assert torch.equal(loss, same)                                        # same seed, same t and noise
     loss.backward()
     assert model.text_encoder.embedding.weight.grad is not None           # the text encoder learns too
+
+
+def test_offset_noise_shifts_each_channel_by_one_number():
+    plain = diffusion_noise((2, 3, 8, 8), 0.0, torch.Generator().manual_seed(0))
+    # OFFSET_NOISE = 0 is the plain noise of DDPM, with the same random numbers as before (the 32x32 runs)
+    assert torch.equal(plain, torch.randn(2, 3, 8, 8, generator=torch.Generator().manual_seed(0)))
+    shifted = diffusion_noise((2, 3, 8, 8), 0.1, torch.Generator().manual_seed(0))
+    offset = shifted - plain                                              # the same numbers first, then the offset
+    # one number for all the pixels of a channel of an image, different between channels
+    assert torch.allclose(offset, offset[:, :, :1, :1].expand_as(offset))
+    assert len(torch.unique(offset[:, :, 0, 0])) == 6                     # 2 images x 3 channels
 
 
 def test_update_ema():

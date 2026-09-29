@@ -81,9 +81,14 @@ class Config:
 
     # ---- Diffusion ----
     NUM_TIMESTEPS = 1000      # T: noise steps, t = 0 (almost clean) ... T - 1 (pure noise)
+    # strength of the offset noise (see diffusion_noise in train.py), 0 = plain DDPM noise. Needed at 64x64: without
+    # it the smoke tests painted grey or tinted backgrounds; the 32x32 runs were trained without it
+    OFFSET_NOISE = 0.1 if IMAGE_SIZE == 64 else 0.0
 
     # ---- UNet ----
-    UNET_CHANNELS = (64, 128, 256)   # channels at 32x32, 16x16, 8x8 (and at 64x64 when IMAGE_SIZE = 64)
+    # channels at 32x32, 16x16, 8x8 (and at 64x64 when IMAGE_SIZE = 64). Doubled at 64x64: with 64 base channels
+    # the smoke tests got faces and colors wrong; the saved checkpoints keep the channels they were trained with
+    UNET_CHANNELS = (128, 256, 512) if IMAGE_SIZE == 64 else (64, 128, 256)
     TIME_DIM = 4 * UNET_CHANNELS[0]  # size of the time embedding given to every ResBlock
     TEXT_CONDITIONING = True         # False: unconditional baseline, no cross-attention
 

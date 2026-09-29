@@ -25,22 +25,50 @@ from preprocessing.cartoon_dataset import CartoonDataset
 from preprocessing.image_preprocessor import ImagePreprocessor
 
 
-def diffusion_loss(model, scheduler, images, tokens, generator=None):
+def diffusion_noise(shape, offset_noise, generator=None, device='cpu'):
+    """The noise put into the images: the plain noise of DDPM, plus the offset noise if OFFSET_NOISE > 0.
+
+    The plain noise has an independent random number per pixel, so over the whole image they cancel out and the
+    mean color stays readable under the noise (more at 64x64: 4096 pixels instead of 1024). The model then never
+    learns to decide it and, starting from pure noise, paints grey or tinted backgrounds. The offset, one random
+    number per channel of every image and the same on all its pixels, hides the mean color too
+    (N. Guttenberg, "Diffusion with Offset Noise", 2023).
+
+    Args:
+        shape: (B, 3, H, W): B = images, 3 = RGB colors, H = W = side of the images.
+        offset_noise: strength of the offset (OFFSET_NOISE); 0 = only the plain noise.
+        generator: torch.Generator of the random numbers (the validation uses a fixed seed), or None.
+        device: where the noise is created.
+
+    Returns:
+        (B, 3, H, W) noise.
+    """
+    noise = torch.randn(shape, generator=generator, device=device)       # eps ~ N(0, I), pixel by pixel
+    if offset_noise:
+        # (B, 3, 1, 1): one number per channel of every image, added to all its pixels. Drawn after eps and only
+        # when used, so OFFSET_NOISE = 0 gives exactly the random numbers of the runs trained without it
+        offset = torch.randn(shape[0], shape[1], 1, 1, generator=generator, device=device)
+        noise = noise + offset_noise * offset
+    return noise
+
+
+def diffusion_loss(model, scheduler, images, tokens, generator=None, offset_noise=0.0):
     """The diffusion objective (DDPM, Algorithm 1): how well the model guesses the noise put into the images.
 
     Args:
         model: DiffusionModel.
         scheduler: NoiseScheduler.
-        images: (B, 3, H, W) clean images in [-1, 1].
-        tokens: (B, L) caption ids.
+        images: (B, 3, H, W) clean images in [-1, 1]: B = images, 3 = RGB colors, H = W = side of the images.
+        tokens: (B, L) caption ids: L = tokens per caption.
         generator: torch.Generator for t and the noise (the validation uses a fixed seed), or None.
+        offset_noise: strength of the offset noise (OFFSET_NOISE), see diffusion_noise; 0 = plain DDPM.
 
     Returns:
         Tensor with one number: mean squared error between the predicted and the real noise.
     """
     device = images.device
     t = torch.randint(0, scheduler.num_timesteps, (len(images),), generator=generator, device=device)  # t ~ U(0, T-1)
-    noise = torch.randn(images.shape, generator=generator, device=device)                              # eps ~ N(0, I)
+    noise = diffusion_noise(images.shape, offset_noise, generator, device)                             # eps (+ offset)
     x_t = scheduler.add_noise(images, t, noise)           # sqrt(alpha_bar) * x_0 + sqrt(1 - alpha_bar) * eps
     return F.mse_loss(model(x_t, t, tokens), noise)       # || eps - eps_theta(x_t, t, text) ||^2
 
@@ -168,7 +196,7 @@ def main(config, smoke_test=False):
                 # classifier-free guidance: a share of the captions becomes the empty caption
                 drop = torch.rand(len(tokens), device=device) < config.CAPTION_DROPOUT
                 tokens = torch.where(drop[:, None], model.empty_tokens, tokens)
-            loss = diffusion_loss(model, scheduler, images, tokens)
+            loss = diffusion_loss(model, scheduler, images, tokens, offset_noise=config.OFFSET_NOISE)
             optimizer.zero_grad()
             loss.backward()                                                      # backpropagation
             torch.nn.utils.clip_grad_norm_(model.parameters(), config.GRAD_CLIP)
@@ -185,7 +213,8 @@ def main(config, smoke_test=False):
             # validation: EMA weights, real captions, the same t and noise every time (fixed seed)
             generator = torch.Generator(device=device).manual_seed(config.SEED)
             with torch.no_grad():
-                val_loss = sum(diffusion_loss(ema, scheduler, images.to(device), tokens.to(device), generator).item()
+                val_loss = sum(diffusion_loss(ema, scheduler, images.to(device), tokens.to(device), generator,
+                                              config.OFFSET_NOISE).item()
                                for images, tokens in val_loader) / len(val_loader)
 
         if config.SAMPLE_EVERY and epoch % config.SAMPLE_EVERY == 0:
