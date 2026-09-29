@@ -216,9 +216,11 @@ Everything goes to `runs/<experiment>/evaluation/`:
 | `disagreements_test.png`, `disagreements_ood.png` | the first 32 generated images with a word the classifier sees differently |
 | `disagreements_test.txt`, `disagreements_ood.txt` | one line per image of the grid: the caption and the words that differ |
 
-FID and KID use `torchmetrics` (torch-fidelity): the 2048 features of Inception-v3 (weights
-`pt_inception-2015-12-05`, downloaded at the first run, about 100 MB), with the images resized to 299x299; the KID
-is averaged over 100 random subsets of 500 images.
+FID and KID use `torchmetrics` 1.9.0 (pinned in `requirements.txt`, because its defaults change between versions):
+the 2048 features of the Inception-v3 of torch-fidelity (weights `pt_inception-2015-12-05`, downloaded at the first
+run, about 100 MB). The images are given as floats in [0, 1] and resized to 299x299 by torchmetrics with
+`torch.nn.functional.interpolate` (bilinear, `antialias=True`, its default). The KID is averaged over 100 random
+subsets of 500 images. All these settings are also written in `evaluation.json`.
 
 ## Tests
 

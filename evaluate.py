@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 
 import torch
+import torchmetrics
 from torchmetrics.image.fid import FrechetInceptionDistance
 from torchmetrics.image.kid import KernelInceptionDistance
 
@@ -320,9 +321,13 @@ def main(run_dir):
     # 5. Quality: FID and KID against the real images of the same split, and between two groups of real images
     halves = torch.randperm(len(real['ood']), generator=torch.Generator().manual_seed(config.SEED))
     half = len(halves) // 2
-    quality = {'settings': {'library': 'torchmetrics (torch-fidelity)', 'network': 'Inception-v3, pt_inception-2015-12-05',
-                            'features': 2048, 'resize': '299x299 bilinear', 'kid_subsets': config.KID_SUBSETS,
-                            'kid_subset_size': config.KID_SUBSET_SIZE},
+    # every detail of the computation: the defaults of torchmetrics change between versions (hence the pin)
+    quality = {'settings': {'library': f'torchmetrics {torchmetrics.__version__}',
+                            'network': 'Inception-v3 of torch-fidelity, weights pt_inception-2015-12-05',
+                            'features': 2048, 'input': 'floats in [0, 1] (normalize=True)',
+                            'resize': '299x299 with torch.nn.functional.interpolate, bilinear, align_corners=False, '
+                                      'antialias=True (the torchmetrics default, not the resize of torch-fidelity)',
+                            'kid_subsets': config.KID_SUBSETS, 'kid_subset_size': config.KID_SUBSET_SIZE},
                'test': fid_kid(real['test'], from_pixels(generated['test']['images']), config),
                'ood': fid_kid(real['ood'], from_pixels(generated['ood']['images']), config),
                'reference_test': fid_kid(real['val'], real['test'], config),

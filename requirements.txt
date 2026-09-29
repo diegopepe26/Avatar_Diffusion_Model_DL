@@ -4,4 +4,4 @@ pandas
 Pillow
 pytest
 torch
-torchmetrics[image]
+torchmetrics[image]==1.9.0
