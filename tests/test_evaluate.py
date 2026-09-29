@@ -5,6 +5,7 @@ import json
 import pytest
 import torch
 
+import evaluate
 from config import Config
 from evaluate import check_run, disagreement_line, generate_images, generate_or_load, load_judge, mean_pair_distance
 from models.attribute_classifier import AttributeClassifier
@@ -87,3 +88,29 @@ def test_disagreement_line_lists_only_the_wrong_words():
     seen = dict(asked, hair='medium', glasses='no glasses')
     assert disagreement_line(5, 'a cartoon avatar', asked, seen) == \
         '5. a cartoon avatar — hair: asked long, sees medium; glasses: asked glasses, sees no glasses'
+
+
+def test_fid_and_kid_get_the_exact_pixels(monkeypatch):
+    received = []       # (normalize, images) of every update
+
+    class Recorder:
+        """Stands in for FID and KID of torchmetrics (no Inception needed): keeps what fid_kid gives them."""
+
+        def __init__(self, **settings):
+            self.kid, self.normalize = 'subsets' in settings, settings['normalize']
+
+        def to(self, device):
+            return self
+
+        def update(self, images, real):
+            received.append((self.normalize, images.cpu()))
+
+        def compute(self):
+            return (torch.tensor(0.0), torch.tensor(0.0)) if self.kid else torch.tensor(0.0)
+
+    monkeypatch.setattr(evaluate, 'FrechetInceptionDistance', Recorder)
+    monkeypatch.setattr(evaluate, 'KernelInceptionDistance', Recorder)
+    pixels = torch.arange(256, dtype=torch.uint8).repeat(1, 3, 1, 1)     # every value 0-255 once: (1, 3, 1, 256)
+    evaluate.fid_kid(pixels, pixels, Config())
+    # the integers themselves, not floats that torchmetrics would turn back into integers (a few one step lower)
+    assert len(received) == 4 and all(not normalize and torch.equal(images, pixels) for normalize, images in received)

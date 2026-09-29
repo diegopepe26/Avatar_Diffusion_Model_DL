@@ -218,7 +218,8 @@ Everything goes to `runs/<experiment>/evaluation/`:
 
 FID and KID use `torchmetrics` 1.9.0 (pinned in `requirements.txt`, because its defaults change between versions):
 the 2048 features of the Inception-v3 of torch-fidelity (weights `pt_inception-2015-12-05`, downloaded at the first
-run, about 100 MB). The images are given as floats in [0, 1] and resized to 299x299 by torchmetrics with
+run, about 100 MB). The images are given as integers from 0 to 255, exactly the pixels of the PNG files (real) and of
+the saved generated images, and resized to 299x299 by torchmetrics with
 `torch.nn.functional.interpolate` (bilinear, `antialias=True`, its default). The KID is averaged over 100 random
 subsets of 500 images. All these settings are also written in `evaluation.json`.
 

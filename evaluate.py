@@ -186,21 +186,23 @@ def fid_kid(real, generated, config):
     """FID and KID between two groups of images, on the 2048 Inception-v3 features (torchmetrics, torch-fidelity).
 
     Args:
-        real, generated: (N, 3, H, W) float in [-1, 1]: N = number of images of each group (the two may differ),
-            3 = RGB colors, H = W = side of the images (resized to 299x299 inside the library).
+        real, generated: (N1, 3, H, W) and (N2, 3, H, W) uint8, values 0-255 as in the PNG files: N1, N2 = number of
+            images of the two groups (they may differ), 3 = RGB colors, H = W = side of the images (resized to
+            299x299 inside the library).
         config: the project Config (uses KID_SUBSETS, KID_SUBSET_SIZE, BATCH_SIZE, SEED).
 
     Returns:
-        {'fid': float, 'kid_mean': float, 'kid_std': float, 'images': [real N, generated N]}.
+        {'fid': float, 'kid_mean': float, 'kid_std': float, 'images': [N1, N2]}.
     """
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    # normalize=True: the images are given as floats in [0, 1]
-    fid = FrechetInceptionDistance(feature=2048, normalize=True).to(device)
+    # normalize=False: the integers 0-255 reach Inception as they are. Given as floats, torchmetrics would turn them
+    # back into integers by truncation, and some values would come back one step lower
+    fid = FrechetInceptionDistance(feature=2048, normalize=False).to(device)
     kid = KernelInceptionDistance(feature=2048, subsets=config.KID_SUBSETS, subset_size=config.KID_SUBSET_SIZE,
-                                  normalize=True).to(device)
+                                  normalize=False).to(device)
     for images, is_real in [(real, True), (generated, False)]:
         for start in range(0, len(images), config.BATCH_SIZE):
-            group = ((images[start:start + config.BATCH_SIZE].float() + 1) / 2).to(device)
+            group = images[start:start + config.BATCH_SIZE].to(device)
             fid.update(group, real=is_real)
             kid.update(group, real=is_real)
     torch.manual_seed(config.SEED)       # the random subsets of the KID
@@ -321,17 +323,19 @@ def main(run_dir):
     # 5. Quality: FID and KID against the real images of the same split, and between two groups of real images
     halves = torch.randperm(len(real['ood']), generator=torch.Generator().manual_seed(config.SEED))
     half = len(halves) // 2
+    # the real images back to 0-255, exactly the pixels of their PNG files (to_pixels undoes normalize exactly)
+    pixels = {split: to_pixels(real[split]) for split in ['val', 'test', 'ood']}
     # every detail of the computation: the defaults of torchmetrics change between versions (hence the pin)
     quality = {'settings': {'library': f'torchmetrics {torchmetrics.__version__}',
                             'network': 'Inception-v3 of torch-fidelity, weights pt_inception-2015-12-05',
-                            'features': 2048, 'input': 'floats in [0, 1] (normalize=True)',
+                            'features': 2048, 'input': 'integers 0-255 (uint8), as in the PNG files (normalize=False)',
                             'resize': '299x299 with torch.nn.functional.interpolate, bilinear, align_corners=False, '
                                       'antialias=True (the torchmetrics default, not the resize of torch-fidelity)',
                             'kid_subsets': config.KID_SUBSETS, 'kid_subset_size': config.KID_SUBSET_SIZE},
-               'test': fid_kid(real['test'], from_pixels(generated['test']['images']), config),
-               'ood': fid_kid(real['ood'], from_pixels(generated['ood']['images']), config),
-               'reference_test': fid_kid(real['val'], real['test'], config),
-               'reference_ood': fid_kid(real['ood'][halves[:half]], real['ood'][halves[half:]], config)}
+               'test': fid_kid(pixels['test'], generated['test']['images'], config),
+               'ood': fid_kid(pixels['ood'], generated['ood']['images'], config),
+               'reference_test': fid_kid(pixels['val'], pixels['test'], config),
+               'reference_ood': fid_kid(pixels['ood'][halves[:half]], pixels['ood'][halves[half:]], config)}
     print(f'5. FID: test {quality["test"]["fid"]:.2f} (real {quality["reference_test"]["fid"]:.2f}), '
           f'OOD {quality["ood"]["fid"]:.2f} (real {quality["reference_ood"]["fid"]:.2f})')
 
