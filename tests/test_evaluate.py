@@ -37,12 +37,23 @@ def test_every_group_of_images_has_its_own_seed():
 
 
 def test_saved_images_are_read_not_generated_again(tmp_path):
-    saved = {'images': torch.randint(0, 256, (3, 3, 32, 32), dtype=torch.uint8), 'seconds': 12.5,
+    tokens = torch.tensor([[2, 5, 3], [2, 6, 3], [2, 7, 3]])       # the ids of 3 captions
+    saved = {'images': torch.randint(0, 256, (3, 3, 32, 32), dtype=torch.uint8), 'tokens': tokens, 'seconds': 12.5,
              'peak_memory_mb': None}
     torch.save(saved, tmp_path / 'generated_test.pt')
-    # no model and no captions: generating again would fail
-    loaded = generate_or_load(tmp_path / 'generated_test.pt', None, None, Config(), None, first_seed=0)
+    # no model: generating again would fail
+    loaded = generate_or_load(tmp_path / 'generated_test.pt', None, None, Config(), tokens, first_seed=0)
     assert torch.equal(loaded['images'], saved['images']) and loaded['seconds'] == 12.5
+
+
+def test_saved_images_of_other_captions_are_not_reused(tmp_path):
+    tokens = torch.tensor([[2, 5, 3], [2, 6, 3], [2, 7, 3]])
+    torch.save({'images': torch.zeros(3, 3, 32, 32, dtype=torch.uint8), 'tokens': tokens, 'seconds': 12.5,
+                'peak_memory_mb': None}, tmp_path / 'generated_diversity.pt')
+    # e.g. SAMPLE_PROMPTS or DIVERSITY_IMAGES changed since the images were generated
+    for other in [tokens[:2], torch.tensor([[2, 5, 3], [2, 6, 3], [2, 8, 3]])]:
+        with pytest.raises(ValueError):
+            generate_or_load(tmp_path / 'generated_diversity.pt', None, None, Config(), other, first_seed=0)
 
 
 def test_check_run_stops_before_the_generation(tmp_path):

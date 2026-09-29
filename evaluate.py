@@ -122,24 +122,30 @@ def generate_or_load(path, model, scheduler, config, tokens, first_seed):
     """Read the images of a previous run if they are saved, otherwise generate them and save them.
 
     A crash after the generation (e.g. during the FID) or a fixed metric then costs minutes, not a new generation.
+    The captions are saved with the images: images of other captions are never reused.
 
     Args:
         path: the .pt file, e.g. runs/conditional_32/evaluation/generated_test.pt.
-        model, scheduler, config, tokens, first_seed: as in generate_images (not used if the file exists).
+        model, scheduler, config, first_seed: as in generate_images (not used if the file exists).
+        tokens: (N, L) caption ids, as in generate_images: N = number of images, L = tokens per caption.
 
     Returns:
-        {'images': (N, 3, H, W) uint8, 'seconds': time of the generation, 'peak_memory_mb': highest GPU memory
-        during it (None without a GPU)}: N = number of images, H = W = side of the images.
+        {'images': (N, 3, H, W) uint8, 'tokens': (N, L) the caption ids, 'seconds': time of the generation,
+        'peak_memory_mb': highest GPU memory during it (None without a GPU)}: H = W = side of the images.
     """
     if path.exists():
+        saved = torch.load(path)
+        # e.g. SAMPLE_PROMPTS or DIVERSITY_IMAGES changed since the generation: the images would not match the prompts
+        if not torch.equal(saved['tokens'], tokens.cpu()):
+            raise ValueError(f'{path} was generated from other captions: delete {path.parent} to generate again')
         print(f'   {path.name} already exists: read from the disk, not generated again')
-        return torch.load(path)
+        return saved
     cuda = torch.cuda.is_available()
     if cuda:
         torch.cuda.reset_peak_memory_stats()     # the peak of this generation only
     start = time.time()
     images = generate_images(model, scheduler, config, tokens, first_seed)
-    result = {'images': images, 'seconds': time.time() - start,
+    result = {'images': images, 'tokens': tokens.cpu(), 'seconds': time.time() - start,
               'peak_memory_mb': torch.cuda.max_memory_allocated() / 2**20 if cuda else None}
     torch.save(result, path)
     return result
@@ -276,8 +282,11 @@ def main(run_dir):
     model, scheduler, run_config, vocabulary = load_model(run_dir)
     folder = run_dir / 'evaluation'
     folder.mkdir(exist_ok=True)
-    print(f'1. {run_dir.name}: {image_size}x{image_size}, {"with" if run_config.TEXT_CONDITIONING else "without"} '
-          f'text, guidance {run_config.GUIDANCE_SCALE}; judge: epoch {judge["epoch"]} (device: {device})')
+    # the baseline has no text, so no classifier-free guidance: None instead of a value it never uses
+    guidance = run_config.GUIDANCE_SCALE if run_config.TEXT_CONDITIONING else None
+    print(f'1. {run_dir.name}: {image_size}x{image_size}, '
+          + (f'with text, guidance {guidance}' if guidance else 'without text, no guidance')
+          + f'; judge: epoch {judge["epoch"]} (device: {device})')
 
     # 2. The real images, captions and labels of the four splits
     data = {split: CartoonDataset(config, split) for split in ['train', 'val', 'test', 'ood']}
@@ -374,7 +383,7 @@ def main(run_dir):
 
     # 8. Everything in one file, for the report
     evaluation = {'experiment': run_dir.name, 'image_size': image_size,
-                  'text_conditioning': run_config.TEXT_CONDITIONING, 'guidance': run_config.GUIDANCE_SCALE,
+                  'text_conditioning': run_config.TEXT_CONDITIONING, 'guidance': guidance,
                   'parameters': parameters, 'sampling': sampling, 'conditioning': conditioning, 'quality': quality,
                   'diversity': diversity}
     with open(folder / 'evaluation.json', 'w') as f:

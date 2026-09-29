@@ -205,16 +205,17 @@ python evaluate.py runs/conditional_32
 It generates one image per row of the ordinary test (1,255) and of the held-out combinations (OOD, 1,736) with
 guidance `GUIDANCE_SCALE`, in groups of `BATCH_SIZE` images, each group with its own seed, plus 16 images for each
 of the 8 `SAMPLE_PROMPTS`. About 80 minutes for `conditional_32` on an RTX 4060 Laptop (the baseline, without
-guidance, about half). The generated images are saved: a second run reads them and takes a few minutes; delete
-`evaluation/` to start again. `IMAGE_SIZE` in `config.py` must be the size of the experiment, because the generated
-images are compared with the real images of that size.
+guidance, about half). The generated images are saved with their captions: a second run reads them and takes a
+few minutes, and stops if the captions have changed (for example `SAMPLE_PROMPTS`); delete `evaluation/` to start
+again, also after a new training of the experiment. `IMAGE_SIZE` in `config.py` must be the size of the
+experiment, because the generated images are compared with the real images of that size.
 
 Everything goes to `runs/<experiment>/evaluation/`:
 
 | File | Content |
 |---|---|
 | `evaluation.json` | conditioning (share of generated images with the words of their caption, per attribute and all five, on test, OOD and each held-out pair, next to the classifier on the real images), quality (FID and KID against the real images of the same split, and between two groups of real images), diversity (mean pixel distance over the pairs of images of the same prompt, generated and real), parameters, seconds per image (in a group and alone) and GPU memory |
-| `generated_test.pt`, `generated_ood.pt`, `generated_diversity.pt` | the generated images (values 0-255), with the seconds and the GPU memory of their generation |
+| `generated_test.pt`, `generated_ood.pt`, `generated_diversity.pt` | the generated images (values 0-255), with their caption ids and the seconds and GPU memory of their generation |
 | `diversity.png` | the 16 images of each `SAMPLE_PROMPT`, two rows per prompt |
 | `disagreements_test.png`, `disagreements_ood.png` | the first 32 generated images with a word the classifier sees differently |
 | `disagreements_test.txt`, `disagreements_ood.txt` | one line per image of the grid: the caption and the words that differ |
