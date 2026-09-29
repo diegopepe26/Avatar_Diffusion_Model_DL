@@ -294,6 +294,8 @@ def main(run_dir):
     tokens = torch.tensor([vocabulary.encode(prompt) for prompt in prompts for _ in range(config.DIVERSITY_IMAGES)])
     print(f'   diversity: {len(tokens)} images, seed {seed}')
     diverse = generate_or_load(folder / 'generated_diversity.pt', model, scheduler, run_config, tokens, seed)
+    # one image alone, as in the demo: measured now, before the Inception networks of FID and KID take GPU memory
+    single_seconds, single_memory = measure_one_image(model, scheduler, run_config, data['test'].tokens[0][None])
 
     # 4. Conditioning: the words the classifier sees in the generated images, next to its accuracy on the real ones
     conditioning = {'judge': {'epoch': judge['epoch'], 'val_accuracy': judge['val']['all']}}
@@ -352,7 +354,6 @@ def main(run_dir):
     # 7. Parameters, sampling time and GPU memory
     parameters = {name: 0 if part is None else sum(p.numel() for p in part.parameters())
                   for name, part in [('total', model), ('text_encoder', model.text_encoder), ('unet', model.unet)]}
-    single_seconds, single_memory = measure_one_image(model, scheduler, run_config, data['test'].tokens[0][None])
     batch_memory = [generated[split]['peak_memory_mb'] for split in ['test', 'ood']]
     sampling = {'device': device, 'batch_size': config.BATCH_SIZE,
                 'seconds_per_image_in_batch': (generated['test']['seconds'] + generated['ood']['seconds'])
