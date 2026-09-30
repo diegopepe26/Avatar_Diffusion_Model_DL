@@ -32,8 +32,10 @@ ATTRIBUTES = {
 config = Config()
 models = {}     # experiment -> (model, scheduler, config, vocabulary): every experiment is loaded only once
 classifiers = {}    # image size -> AttributeClassifier, the judge of the images of that size (None if not trained)
+texts = {}     # experiment -> True if it reads the caption, False for the unconditional baseline
 ICONS = Config.ROOT / 'assets' / 'icons'     # one SVG per word of MAPPING, for the cards and the options
-COUNTS = [1, 2, 4, 8]                         # the choices of the number of images
+BASELINE_PROMPT = 'The baseline generates without text: the attributes and the guidance are ignored.'
+COUNTS = [1, 2, 4, 8]                       # the choices of the number of images
 GUIDANCES = [1.0, 2.0, 3.0, 5.0, 7.0]         # the choices of the guidance: 1 = no push towards the caption
 
 # ---- Look of the page: two panels on one white sheet, black for what is chosen and for the action ----
@@ -87,6 +89,8 @@ CSS = f"""
 #cards .card::before {{ order: -1; font-size: 0.74rem; font-weight: 500; color: {MUTED}; }}
 {CARD_NAMES}
 #cards .card:hover {{ border-color: #BDBAB3; }}
+/* the baseline ignores the caption: its controls stay in place but faded */
+#cards .card:disabled, #randoms button:disabled, .pills label:has(input:disabled) {{ opacity: 0.4; cursor: not-allowed; }}
 @media (max-width: 640px) {{ #choose, #results {{ padding: 20px 16px; }} }}
 #randoms {{ gap: 8px; flex-wrap: wrap; }}
 #randoms button {{ flex: 0 0 auto; border-radius: 999px; font-weight: 500; padding: 5px 14px; }}
@@ -266,19 +270,23 @@ def verdict_table(chosen, seen, seeds):
     """Table of what the attribute classifier sees in every image: ✓ where it is the word of the card, ✗ where not.
 
     Args:
-        chosen: {attribute: word} chosen on the cards.
+        chosen: {attribute: word} chosen on the cards; None for the baseline, which had no words to follow: then
+            the table only describes the images, without ✓ and ✗.
         seen: one {attribute: word} per image, the words the classifier sees in it.
         seeds: the seed of every image, in the same order as seen.
 
     Returns:
         One line that explains the table, then a Markdown table with one row per image, e.g.
-        '| 7 | ✓ dark | ✗ medium | ✓ black | ✓ glasses | ✓ a beard |' (the ticks and crosses in a colored span).
+        '| 7 | ✓ dark | ✗ medium | ✓ black | ✓ glasses | ✓ a beard |' (the ticks and crosses in a colored span),
+        or '| 7 | dark | medium | black | glasses | a beard |' for the baseline.
     """
-    rows = ['The attribute classifier reads each avatar: ✓ the chosen word, ✗ a different one.', '',
-            '| Seed | ' + ' | '.join(ATTRIBUTES) + ' |', '|---' * (len(ATTRIBUTES) + 1) + '|']
+    intro = ('The attribute classifier reads each avatar: ✓ the chosen word, ✗ a different one.' if chosen else
+             'The baseline has no text to follow: the attribute classifier describes what it drew.')
+    rows = [intro, '', '| Seed | ' + ' | '.join(ATTRIBUTES) + ' |', '|---' * (len(ATTRIBUTES) + 1) + '|']
     for words, image_seed in zip(seen, seeds):
         # by the name of the attribute, never by position: the page and MAPPING have different orders
-        cells = [('<span class="ok">✓</span> ' if words[attribute] == chosen[attribute]
+        cells = [words[attribute] if chosen is None else
+                 ('<span class="ok">✓</span> ' if words[attribute] == chosen[attribute]
                   else '<span class="no">✗</span> ') + words[attribute] for attribute in ATTRIBUTES.values()]
         rows.append(f'| {image_seed} | ' + ' | '.join(cells) + ' |')
     return '\n'.join(rows)
@@ -296,8 +304,8 @@ def on_generate(experiment, seed, count, guidance, save, *words):
         words: the words chosen on the cards, in the order of ATTRIBUTES.
 
     Returns:
-        (list of (image enlarged 4 times, 'seed N · right words/5'), table of what the classifier sees
-        (empty without a classifier), message with the time and the folder).
+        (list of (image enlarged 4 times, 'seed N · right words/5', only 'seed N' for the baseline), table of what
+        the classifier sees (empty without a classifier), message with the time and the folder).
     """
     if not experiment:
         return [], '', 'No trained experiment in runs/: run train.py first.'
@@ -320,8 +328,13 @@ def on_generate(experiment, seed, count, guidance, save, *words):
         # the images as the classifier saw them in training: (count, 3, size, size) in [-1, 1]
         pixels = torch.stack([ImagePreprocessor.normalize(image) for image in images])
         seen = [attribute_words(row, config) for row in predict(classifiers[size], pixels, config).tolist()]
-        table = verdict_table(chosen, seen, seeds)
-        captions = [f'{text} · {sum(found[a] == chosen[a] for a in chosen)}/5' for text, found in zip(captions, seen)]
+        if run_config.TEXT_CONDITIONING:
+            table = verdict_table(chosen, seen, seeds)
+            captions = [f'{text} · {sum(found[a] == chosen[a] for a in chosen)}/5'
+                        for text, found in zip(captions, seen)]
+        else:
+            # the baseline read no words: no score, the classifier only describes what it drew
+            table = verdict_table(None, seen, seeds)
 
     # 4 times bigger, keeping the real pixels (no smoothing), as in the control grids
     images = [image.resize((image.width * 4, image.height * 4), Image.NEAREST) for image in images]
@@ -370,6 +383,43 @@ def on_random(held_out):
     options = [gr.Button(variant='primary' if option == word else 'secondary')
                for attribute, word in zip(ATTRIBUTES.values(), words) for option in config.MAPPING[attribute]]
     return (*words, *cards, *caption_and_warning(*words), *options)
+
+
+def has_text(experiment):
+    """Whether an experiment reads the caption, from the settings in its checkpoint (read once).
+
+    Args:
+        experiment: name of a folder of RUNS_DIR, e.g. 'unconditional_32'.
+
+    Returns:
+        False for the unconditional baseline, True otherwise.
+    """
+    if experiment not in texts:
+        # mmap: only the settings are read from the disk, not the weights
+        checkpoint = torch.load(config.RUNS_DIR / experiment / 'last.pt', map_location='cpu', weights_only=False,
+                                mmap=True)
+        texts[experiment] = checkpoint['settings']['TEXT_CONDITIONING']
+    return texts[experiment]
+
+
+def text_controls(text, *words):
+    """The controls of the caption: usable for an experiment with text, faded for the baseline, which ignores them.
+
+    Args:
+        text: False for the unconditional baseline.
+        words: the words chosen on the cards, in the order of ATTRIBUTES: they come back with the text.
+
+    Returns:
+        (the 5 cards, the 2 random buttons, the guidance, caption, warning).
+    """
+    caption, warning = caption_and_warning(*words) if text else (BASELINE_PROMPT, '')
+    buttons = [gr.Button(interactive=text) for _ in range(len(ATTRIBUTES) + 2)]
+    return (*buttons, gr.Radio(interactive=text), caption, warning)
+
+
+def on_experiment(experiment, *words):
+    """Choice of an experiment: the controls of the caption on or off, see text_controls."""
+    return text_controls(not experiment or has_text(experiment), *words)
 
 
 def build_page():
@@ -441,7 +491,10 @@ def build_page():
                                 [*words, *cards.values(), caption, warning, *all_options])
 
         # the prompt is written when the page opens; the results replace the empty frame at the first click
-        page.load(caption_and_warning, inputs=words, outputs=[caption, warning])
+        # the controls of the caption follow the experiment, also for the one chosen when the page opens
+        controls = [*cards.values(), random_seen, random_ood, guidance, caption, warning]
+        page.load(on_experiment, inputs=[experiment, *words], outputs=controls)
+        experiment.change(on_experiment, inputs=[experiment, *words], outputs=controls)
         button.click(lambda: (gr.HTML(visible=False), gr.Gallery(visible=True)), None, [empty, gallery]).then(
             on_generate, inputs=[experiment, seed, count, guidance, save, *words], outputs=[gallery, verdict, message])
     return page

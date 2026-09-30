@@ -171,6 +171,11 @@ five words are right (e.g. `seed 7 · 4/5`). The classifier is the one of the si
 (`runs/classifier_32/` for a 32x32 run): without it the images are shown without the table, and the page says to
 run `train_classifier.py`.
 
+For an experiment without text (the unconditional baseline, read from its checkpoint) the cards, the random buttons
+and the guidance are faded and cannot be clicked, and the prompt says that the baseline ignores them. The table has
+no ✓ and ✗ and the images no score: the baseline had no words to follow, so the classifier only describes what it
+drew.
+
 ## Attribute classifier
 
 The judge of the conditioning metric: FID and KID say whether the generated images look like real avatars, not

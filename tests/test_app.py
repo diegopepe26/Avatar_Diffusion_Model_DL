@@ -39,6 +39,23 @@ def test_random_ood_prompt_is_always_held_out_with_both_pairs():
     assert pairs == {'dark + long', 'blonde + sunglasses'}
 
 
+def test_baseline_hides_the_prompt_and_the_ood_warning():
+    # the baseline reads no caption: the prompt says so and the OOD badge goes away; with text they come back
+    words = ('dark', 'long', 'black', 'glasses', 'a beard')      # dark + long: a held-out combination
+    *_, caption, warning = app.text_controls(False, *words)
+    assert caption == app.BASELINE_PROMPT and warning == ''
+    *_, caption, warning = app.text_controls(True, *words)
+    assert caption == 'a cartoon avatar with dark skin, long black hair, glasses and a beard' and warning
+
+
+def test_baseline_table_has_no_ticks():
+    # the baseline had no words to follow: the table describes its images, it never marks a word right or wrong
+    seen = {'face_color': 'tan', 'hair_color': 'blonde', 'hair': 'short', 'glasses': 'glasses', 'facial_hair': 'a beard'}
+    table = app.verdict_table(None, [seen], [7])
+    assert table.splitlines()[-1] == '| 7 | tan | short | blonde | glasses | a beard |'
+    assert '✓' not in table and '✗' not in table
+
+
 def test_gallery_shows_the_real_pixels():
     galleries = [block for block in app.build_page().blocks.values() if isinstance(block, gr.Gallery)]
     assert galleries[0].format == 'png'       # webp (the default) would blur the 4x enlarged pixels
