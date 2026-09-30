@@ -6,6 +6,7 @@ On Colab:     python app.py --share    (it also prints a public link, e.g. to sh
 """
 
 import argparse
+import random
 import time
 from functools import partial
 
@@ -87,6 +88,8 @@ CSS = f"""
 {CARD_NAMES}
 #cards .card:hover {{ border-color: #BDBAB3; }}
 @media (max-width: 640px) {{ #choose, #results {{ padding: 20px 16px; }} }}
+#randoms {{ gap: 8px; flex-wrap: wrap; }}
+#randoms button {{ flex: 0 0 auto; border-radius: 999px; font-weight: 500; padding: 5px 14px; }}
 #prompt textarea {{ font-size: 0.95rem; color: {INK}; }}
 .ood {{ display: inline-block; background: #F6D58E; color: {INK}; border-radius: 999px; padding: 4px 12px;
         font-size: 0.88rem; font-weight: 600; }}
@@ -95,6 +98,8 @@ CSS = f"""
 .pills label {{ border: 1px solid {LINE}; border-radius: 999px; background: #FFFFFF; padding: 6px 14px;
                min-width: 44px; justify-content: center; box-shadow: none; font-weight: 500; }}
 .pills label input {{ position: absolute; opacity: 0; width: 1px; height: 1px; }}
+/* Gradio leaves room on the left of the text for the round button of the radio, which is hidden here */
+.pills label span {{ margin-left: 0; }}
 .pills label:has(input:checked) {{ background: {INK}; border-color: {INK}; color: #FFFFFF; }}
 .toggle label {{ border: 1px solid {LINE}; border-radius: 999px; background: #FFFFFF; padding: 6px 15px;
                 width: fit-content; font-weight: 500; }}
@@ -224,6 +229,22 @@ def choose(attribute, word, words):
     return (new_words, *caption_and_warning(*new_words))
 
 
+def random_words(held_out):
+    """Words picked at random for the five cards, for the buttons Random prompt and Random OOD prompt.
+
+    Args:
+        held_out: False for a combination seen in training, True for one with a pair held out of it (OOD).
+
+    Returns:
+        The five words, in the order of ATTRIBUTES.
+    """
+    while True:
+        # one word per attribute, all equally likely, drawn again until the combination is of the kind asked
+        chosen = {attribute: random.choice(list(config.MAPPING[attribute])) for attribute in ATTRIBUTES.values()}
+        if is_held_out(chosen, config) == held_out:
+            return tuple(chosen.values())
+
+
 def file_name(words, seed, guidance, text_conditioning):
     """Name of a saved image, with everything that decides it, so that no two settings overwrite each other.
 
@@ -334,6 +355,23 @@ def on_option(attribute, word, *words):
     return (*new_words, card, gr.Column(visible=False), caption, warning, *options)
 
 
+def on_random(held_out):
+    """Click on Random prompt or Random OOD prompt: new words on all the cards, as if chosen by hand.
+
+    Args:
+        held_out: False for Random prompt, True for Random OOD prompt.
+
+    Returns:
+        (the 5 words, the 5 cards, caption, warning, the options of every sheet with the chosen ones outlined).
+    """
+    words = random_words(held_out)
+    cards = [gr.Button(value=word, icon=str(icon_file(attribute, word)))
+             for attribute, word in zip(ATTRIBUTES.values(), words)]
+    options = [gr.Button(variant='primary' if option == word else 'secondary')
+               for attribute, word in zip(ATTRIBUTES.values(), words) for option in config.MAPPING[attribute]]
+    return (*words, *cards, *caption_and_warning(*words), *options)
+
+
 def build_page():
     """The page: step 01 with the cards of the attributes and the settings, step 02 with the avatars, and one
     sheet of options per attribute, hidden until its card is clicked.
@@ -355,6 +393,9 @@ def build_page():
                     cards = {attribute: gr.Button(first[attribute], icon=str(icon_file(attribute, first[attribute])),
                                                   elem_id=f'card-{attribute}', elem_classes='card')
                              for attribute in ATTRIBUTES.values()}
+                with gr.Row(elem_id='randoms'):
+                    random_seen = gr.Button('Random prompt', size='sm', min_width=0)
+                    random_ood = gr.Button('Random OOD prompt', size='sm', min_width=0)
                 caption = gr.Textbox(label='Prompt', interactive=False, lines=2, elem_id='prompt')
                 # sanitize_html=False keeps the class of the badge: the text is ours, never typed by the user
                 warning = gr.Markdown(sanitize_html=False, elem_id='warning')
@@ -365,7 +406,7 @@ def build_page():
                                     label='Guidance', elem_classes='pills')
                 with gr.Row(elem_id='seed-row'):
                     seed = gr.Number(value=0, precision=0, label='Seed', min_width=120)
-                    save = gr.Checkbox(value=True, label='Save images', elem_classes='toggle', min_width=120)
+                    save = gr.Checkbox(value=False, label='Save images', elem_classes='toggle', min_width=120)
                 button = gr.Button('Generate avatars', variant='primary', elem_id='generate')
             with gr.Column(scale=1, min_width=320, elem_id='results'):
                 gr.HTML(step('02', 'Your avatars', 'The attribute classifier checks every avatar against the prompt.'))
@@ -378,6 +419,7 @@ def build_page():
                 verdict = gr.Markdown(sanitize_html=False, elem_id='verdict')
                 message = gr.Markdown(elem_id='message')
 
+        all_options = []     # the options of every sheet, in the order of ATTRIBUTES, for the random buttons
         for label, attribute in ATTRIBUTES.items():
             with gr.Column(visible=False, elem_classes='overlay') as sheet:
                 with gr.Column(elem_classes='sheet'):
@@ -393,6 +435,10 @@ def build_page():
             for word, option in zip(config.MAPPING[attribute], options):
                 option.click(partial(on_option, attribute, word), inputs=words,
                              outputs=[*words, cards[attribute], sheet, caption, warning, *options])
+            all_options += options
+        for random_button, held_out in [(random_seen, False), (random_ood, True)]:
+            random_button.click(partial(on_random, held_out), None,
+                                [*words, *cards.values(), caption, warning, *all_options])
 
         # the prompt is written when the page opens; the results replace the empty frame at the first click
         page.load(caption_and_warning, inputs=words, outputs=[caption, warning])

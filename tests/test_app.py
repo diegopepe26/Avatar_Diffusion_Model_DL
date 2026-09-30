@@ -4,6 +4,7 @@ import gradio as gr
 
 import app
 from config import Config
+from generate import is_held_out
 
 
 def test_every_word_has_its_icon():
@@ -20,6 +21,22 @@ def test_choosing_an_option_changes_only_its_attribute():
     assert new_words == ('dark', 'long', 'black', 'glasses', 'a beard')
     assert caption == 'a cartoon avatar with dark skin, long black hair, glasses and a beard'
     assert warning                                   # dark skin + long hair: held out of training (OOD)
+
+
+def test_random_prompt_is_never_held_out():
+    # the button Random prompt: only combinations seen in training, never the OOD badge
+    for _ in range(200):
+        assert not is_held_out(dict(zip(app.ATTRIBUTES.values(), app.random_words(held_out=False))), Config())
+
+
+def test_random_ood_prompt_is_always_held_out_with_both_pairs():
+    # the button Random OOD prompt: always a held-out combination, and not always the same pair
+    pairs = set()
+    for _ in range(200):
+        chosen = dict(zip(app.ATTRIBUTES.values(), app.random_words(held_out=True)))
+        assert is_held_out(chosen, Config())
+        pairs.add('dark + long' if (chosen['face_color'], chosen['hair']) == ('dark', 'long') else 'blonde + sunglasses')
+    assert pairs == {'dark + long', 'blonde + sunglasses'}
 
 
 def test_gallery_shows_the_real_pixels():
