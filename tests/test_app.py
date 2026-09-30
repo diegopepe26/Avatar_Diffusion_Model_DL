@@ -3,6 +3,23 @@
 import gradio as gr
 
 import app
+from config import Config
+
+
+def test_every_word_has_its_icon():
+    # the cards and the options of the page show one icon per word: a word without icon would break the page
+    for attribute, words in Config().MAPPING.items():
+        for word in words:
+            assert app.icon_file(attribute, word).is_file(), f'no icon for {attribute} = {word}'
+
+
+def test_choosing_an_option_changes_only_its_attribute():
+    # the words of the page, in the order of ATTRIBUTES: skin, hair length, hair color, glasses, beard
+    words = ('dark', 'short', 'black', 'glasses', 'a beard')
+    new_words, caption, warning = app.choose('hair', 'long', words)
+    assert new_words == ('dark', 'long', 'black', 'glasses', 'a beard')
+    assert caption == 'a cartoon avatar with dark skin, long black hair, glasses and a beard'
+    assert warning                                   # dark skin + long hair: held out of training (OOD)
 
 
 def test_gallery_shows_the_real_pixels():
@@ -18,7 +35,7 @@ def test_file_names_keep_the_guidance():
 
 
 def test_verdict_table_marks_the_words_the_classifier_does_not_see():
-    # the menus: hair length before hair color
+    # the cards: hair length before hair color
     chosen = {'face_color': 'dark', 'hair': 'long', 'hair_color': 'black', 'glasses': 'glasses', 'facial_hair': 'a beard'}
     # the classifier: the order of MAPPING (hair color before hair length), wrong only on the hair length
     seen = {'face_color': 'dark', 'hair_color': 'black', 'hair': 'medium', 'glasses': 'glasses', 'facial_hair': 'a beard'}

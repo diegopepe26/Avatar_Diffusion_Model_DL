@@ -1,4 +1,4 @@
-gradio
+gradio==6.28.0
 numpy
 pandas
 Pillow
