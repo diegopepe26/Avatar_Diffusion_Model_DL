@@ -74,16 +74,19 @@ CSS = f"""
                padding: 3px 9px; }}
 .step h2 {{ font-size: 1.25rem; font-weight: 600; letter-spacing: -0.01em; margin: 0; }}
 .hint {{ color: {MUTED}; font-size: 0.92rem; line-height: 1.5; margin: 6px 0 0; max-width: 52ch; }}
-/* the five cards: the icon of the chosen word, the name of the attribute, the word */
-#cards {{ display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; align-items: stretch; }}
+/* the five cards: the icon of the chosen word, the name of the attribute, the word. A card is never narrower
+   than 86 px, the room of the longest word (sunglasses, 77 px): on a narrow panel the last cards go to a new row.
+   If a word still does not fit (e.g. the text zoomed in), it breaks instead of sticking out of its card */
+#cards {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(86px, 1fr)); gap: 8px; align-items: stretch; }}
 #cards .card {{ flex-direction: column; gap: 2px; padding: 12px 4px 10px; min-width: 0; min-height: 124px;
-               border: 1px solid {LINE}; border-radius: 18px; font-weight: 600; font-size: 0.88rem; }}
-#cards .card img {{ width: 52px; height: 52px; margin: 0 0 6px; order: -2; }}
+               border: 1px solid {LINE}; border-radius: 18px; font-weight: 600; font-size: 0.88rem;
+               overflow-wrap: anywhere; }}
+/* Gradio crops the icons to fill their square (cover): the whole face is shown instead, even if not square */
+#cards .card img {{ width: 52px; height: 52px; margin: 0 0 6px; order: -2; object-fit: contain; }}
 #cards .card::before {{ order: -1; font-size: 0.74rem; font-weight: 500; color: {MUTED}; }}
 {CARD_NAMES}
 #cards .card:hover {{ border-color: #BDBAB3; }}
-@media (max-width: 640px) {{ #cards {{ grid-template-columns: repeat(3, minmax(0, 1fr)); }}
-                            #choose, #results {{ padding: 20px 16px; }} }}
+@media (max-width: 640px) {{ #choose, #results {{ padding: 20px 16px; }} }}
 #prompt textarea {{ font-size: 0.95rem; color: {INK}; }}
 .ood {{ display: inline-block; background: #F6D58E; color: {INK}; border-radius: 999px; padding: 4px 12px;
         font-size: 0.88rem; font-weight: 600; }}
@@ -134,8 +137,8 @@ button:focus-visible, label:has(input:focus-visible) {{ outline: 2px solid {INK}
 #verdict th, #verdict td {{ white-space: nowrap; }}
 #verdict tr {{ border: none; }}
 #verdict th {{ text-align: left; color: {MUTED}; font-weight: 500; background: none; border: none;
-              border-bottom: 1px solid {LINE}; padding: 6px 10px; }}
-#verdict td {{ border: none; border-bottom: 1px solid {LINE}; padding: 7px 10px; }}
+              border-bottom: 1px solid {LINE}; padding: 6px 7px; }}
+#verdict td {{ border: none; border-bottom: 1px solid {LINE}; padding: 7px 7px; }}
 #verdict .ok {{ color: #2E7D4F; font-weight: 700; }}
 #verdict .no {{ color: #B3261E; font-weight: 700; }}
 #message {{ color: {MUTED}; font-size: 0.9rem; }}
@@ -150,7 +153,7 @@ button:focus-visible, label:has(input:focus-visible) {{ outline: 2px solid {INK}
 .options {{ display: grid !important; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 10px; }}
 .options .option {{ flex-direction: column; gap: 8px; padding: 14px 6px; min-width: 0; border-radius: 18px;
                    font-weight: 600; }}
-.options .option img {{ width: 56px; height: 56px; margin: 0; }}
+.options .option img {{ width: 56px; height: 56px; margin: 0; object-fit: contain; }}
 /* the chosen word: a black outline, not a black fill, so its icon stays readable */
 .options .option.primary {{ background: #FFFFFF; color: {INK}; border: 2px solid {INK}; }}
 """
@@ -346,7 +349,7 @@ def build_page():
         # the chosen words, in the order of ATTRIBUTES: the cards only show them
         words = [gr.State(first[attribute]) for attribute in ATTRIBUTES.values()]
         with gr.Row(elem_id='shell', equal_height=False):
-            with gr.Column(scale=5, min_width=320, elem_id='choose'):
+            with gr.Column(scale=1, min_width=320, elem_id='choose'):
                 gr.HTML(step('01', 'Choose your avatar', 'Pick the five attributes, then the model and the settings.'))
                 with gr.Row(elem_id='cards'):
                     cards = {attribute: gr.Button(first[attribute], icon=str(icon_file(attribute, first[attribute])),
@@ -364,7 +367,7 @@ def build_page():
                     seed = gr.Number(value=0, precision=0, label='Seed', min_width=120)
                     save = gr.Checkbox(value=True, label='Save images', elem_classes='toggle', min_width=120)
                 button = gr.Button('Generate avatars', variant='primary', elem_id='generate')
-            with gr.Column(scale=7, min_width=320, elem_id='results'):
+            with gr.Column(scale=1, min_width=320, elem_id='results'):
                 gr.HTML(step('02', 'Your avatars', 'The attribute classifier checks every avatar against the prompt.'))
                 empty = gr.HTML(EMPTY)
                 # png: the default webp would blur the enlarged pixels and change their colors

@@ -152,8 +152,8 @@ python app.py            # then open the address it prints, e.g. http://127.0.0.
 ```
 
 A web page in two panels. On the left, **Choose your avatar**: five cards, one per attribute, each with the
-icon of the chosen word; a click on a card opens its options (the real skin and hair colors of the dataset as
-swatches, small drawings for hair length, glasses and beard). Under the cards: the prompt, composed from the
+icon of the chosen word; a click on a card opens its options, each drawn as a small cartoon face (the icons are
+in `assets/icons/`). Under the cards: the prompt, composed from the
 attributes with the training template, with a warning for the held-out combinations (OOD); the experiment (the
 folders of `runs/` with a checkpoint), the number of images (1, 2, 4, 8), the guidance (1, 2, 3, 5, 7), the seed
 of the first image and **Save images**; then press **Generate avatars**. On the right, **Your avatars**: the
