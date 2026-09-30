@@ -83,6 +83,7 @@ wrong. Set `IMAGE_SIZE = 32` to go back.
 | `models/attribute_classifier.py` | `AttributeClassifier`: small CNN, one head per attribute; `load_classifier`: the trained classifier of one image size; `predict`: the words it sees, as class numbers; `measure_accuracy`: share of right words, per attribute and all five together |
 | `train_classifier.py` | trains the attribute classifier on the real training images and half of the real OOD images, keeps the best epoch on val, measures it on the real images it has never seen |
 | `evaluate.py` | evaluation of an experiment on the test and OOD captions: conditioning (attribute classifier), FID and KID with real-vs-real references, diversity across seeds, parameters, sampling time and GPU memory |
+| `guidance_val.py` | choice of the guidance: conditioning, FID, KID and diversity at several guidance values, on the validation captions |
 
 ## Use in training
 
@@ -210,7 +211,8 @@ guidance `GUIDANCE_SCALE`, in groups of `BATCH_SIZE` images, each group with its
 of the 8 `SAMPLE_PROMPTS`. About 80 minutes for `conditional_32` on an RTX 4060 Laptop (the baseline, without
 guidance, about half). The generated images are saved with their captions: a second run reads them and takes a
 few minutes, and stops if the captions have changed (for example `SAMPLE_PROMPTS`); delete `evaluation/` to start
-again, also after a new training of the experiment. `IMAGE_SIZE` in `config.py` must be the size of the
+again, also after a new training of the experiment or a change of `GUIDANCE_SCALE` (the saved images are recognized
+by their captions only, not by the guidance). `IMAGE_SIZE` in `config.py` must be the size of the
 experiment, because the generated images are compared with the real images of that size.
 
 Everything goes to `runs/<experiment>/evaluation/`:
@@ -229,6 +231,22 @@ run, about 100 MB). The images are given as integers from 0 to 255, exactly the 
 the saved generated images, and resized to 299x299 by torchmetrics with
 `torch.nn.functional.interpolate` (bilinear, `antialias=True`, its default). The KID is averaged over 100 random
 subsets of 500 images. All these settings are also written in `evaluation.json`.
+
+### Choice of the guidance
+
+```bash
+python guidance_val.py runs/conditional_32
+```
+
+It generates one image per validation caption (1,255) for each value of `GUIDANCES` (1, 2, 3, 5, 7), all from the
+same seeds, and measures the conditioning, FID and KID against the real validation images, and the diversity on the
+4 seen `SAMPLE_PROMPTS` (the held-out ones stay for the final test). About 35 minutes per value for
+`conditional_32`; a second run reads the images already generated. The guidance is chosen on validation, so that
+test and OOD, measured by `evaluate.py`, stay an honest final measure. The rule: the lowest FID among the values
+whose images have all five words right at least as often as the real validation images (98.3%, the classifier on
+the real images). For `conditional_32` it is guidance 2 (FID 16.44, all five right in 99.5%; guidance 3: 19.72 and
+99.7%; guidance 1: 14.15 but 95.6%), the value of `GUIDANCE_SCALE`. Everything goes to
+`runs/<experiment>/guidance_val/`: `guidance_val.json`, the generated images and one diversity grid per value.
 
 ## Tests
 

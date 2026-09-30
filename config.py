@@ -105,7 +105,9 @@ class Config:
     SAMPLE_EVERY = 25                 # epochs between two control grids (0 = never)
     CHECKPOINT_EVERY = 1              # epochs between two validations + checkpoints (1 = every epoch: 45 steps at 32x32)
     DETERMINISTIC = False             # True: two trainings from the same seed give exactly the same model (~30% slower)
-    GUIDANCE_SCALE = 3.0              # strength of classifier-free guidance when generating
+    # strength of classifier-free guidance when generating. Chosen on the validation captions with guidance_val.py:
+    # the lowest FID among the values whose images have all five words right at least as often as the real ones
+    GUIDANCE_SCALE = 2.0
     SAMPLE_PROMPTS = [                # control grid: 4 captions seen in training, 4 held-out (OOD)
         'a cartoon avatar with pale skin, short brown hair, glasses and no beard',
         'a cartoon avatar with tan skin, long black hair, no glasses and no beard',
