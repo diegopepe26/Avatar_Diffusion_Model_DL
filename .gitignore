@@ -1,0 +1,16 @@
+# Data stays on each computer: raw download and generated files
+dataset/
+data/
+data_100/
+runs/
+runs_100/
+runs_longer/
+runs_100_longer/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Editor settings: personal, they stay on each computer
+.vscode/
