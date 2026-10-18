@@ -394,7 +394,7 @@ def main(run_dir, subset=False):
     print(f'5. FID: test {quality["test"]["fid"]:.2f} (real {quality["reference_test"]["fid"]:.2f}), '
           f'OOD {quality["ood"]["fid"]:.2f} (real {quality["reference_ood"]["fid"]:.2f})')
 
-    # 6. Diversity of the generated images of each prompt, compared with the real images with the same caption 
+    # 6. Diversity of the generated images of each prompt, compared with the real images with the same caption
     # (taken from all the splits)
     ImagePreprocessor(run_config).save_preview(
         [ImagePreprocessor.denormalize(image) for image in from_pixels(diverse['images'])], folder / 'diversity.png')

@@ -3,8 +3,10 @@
 For every value in GUIDANCES it generates one image per validation caption and DIVERSITY_IMAGES images per
 SAMPLE_PROMPT seen in training, always from the same seeds. Then it measures how often the images show the words of
 their caption (with the attribute classifier), FID and KID against the real validation images, and the diversity.
-Test and OOD are not used here, they are measured only once by evaluate.py. Everything is saved in
-runs/<experiment>/guidance_val/. If the script stops, running it again reads the images already generated.
+No image is generated for the test and OOD captions, which evaluate.py measures only once. Their real images only
+give two reference numbers, the FID between the real val and test images and the diversity of the real images.
+Everything is saved in runs/<experiment>/guidance_val/. If the script stops, running it again reads the images
+already generated.
 """
 
 import argparse

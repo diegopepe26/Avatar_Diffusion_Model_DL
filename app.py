@@ -514,7 +514,7 @@ def on_model(change, run, *words):
     if not (run_folder(run) / 'last.pt').exists():
         run['kind'] = 'conditional'
 
-    cells =[gr.Button(variant='primary' if (kind, size) == (run['kind'], run['size']) else 'secondary',
+    cells = [gr.Button(variant='primary' if (kind, size) == (run['kind'], run['size']) else 'secondary',
                        interactive=(run_folder({**run, 'kind': kind, 'size': size}) / 'last.pt').exists())
              for kind in KINDS.values() for size in SIZES]
     datasets = [gr.Button(variant='primary' if dataset == run['dataset'] else 'secondary') for dataset in DATASETS]

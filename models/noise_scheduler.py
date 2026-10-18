@@ -1,4 +1,6 @@
-"""Forward diffusion, the fixed recipe that brings a clean image to the noise level of step t."""
+"""Forward diffusion, the fixed recipe that brings a clean image to the noise level of step t, and the step back
+from step t to step t - 1 used by the generation.
+"""
 
 import math
 
@@ -6,7 +8,7 @@ import torch
 
 
 class NoiseScheduler:
-    """Cosine noise schedule and the noising of the images.
+    """Cosine noise schedule, the noising of the images (add_noise) and the step back of the generation (step).
 
     There are T = NUM_TIMESTEPS noise steps (1000), from t = 0 (almost the clean image) to t = T - 1 (pure noise).
     There is nothing to train, the same step t always gives the same amount of noise.

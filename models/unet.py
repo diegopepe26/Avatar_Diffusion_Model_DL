@@ -9,7 +9,7 @@ from models.sinusoidal import sinusoidal_embedding
 
 
 class ResBlock(nn.Module):
-    """Residual block composed by two 3x3 convolutions with the time embedding added in between."""
+    """Residual block composed of two 3x3 convolutions with the time embedding added in between."""
 
     def __init__(self, in_channels, out_channels, config, film=False):
         """Args:
@@ -39,6 +39,7 @@ class ResBlock(nn.Module):
         """Args:
             x: (B, in_channels, H, W).
             time: (B, TIME_DIM), the time embedding of the step t of every image.
+            text: (B, D_MODEL) the mean of the caption tokens, used by FiLM in the pooled ablation.
 
         Returns:
             (B, out_channels, H, W).
@@ -50,9 +51,8 @@ class ResBlock(nn.Module):
 
         h = self.norm2(h)
         if self.film is not None:
-            # h * (1 + gamma) + beta. With gamma and beta near 0, as at the start of the
-            # training, the channel stays almost as it is, and gamma = -1 switches it off. The same two numbers
-            # are used on every pixel
+            # every channel is scaled and shifted, h * (1 + gamma) + beta, with two numbers per channel that are the same on
+            # all its pixels. With gamma = 0 and beta = 0 the channel stays as it is
             gamma, beta = self.film(text).chunk(2, dim=1)                  # (B, C) each
             h = h * (1 + gamma[:, :, None, None]) + beta[:, :, None, None]
 
@@ -210,7 +210,7 @@ class UNet(nn.Module):
         Returns:
             (B, 3, IMAGE_SIZE, IMAGE_SIZE) predicted noise.
         """
-        time =self.time_mlp(sinusoidal_embedding(t, self.base_channels))    # (B, TIME_DIM)
+        time = self.time_mlp(sinusoidal_embedding(t, self.base_channels))    # (B, TIME_DIM)
 
         text = None
         if self.pooled:

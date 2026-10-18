@@ -51,13 +51,14 @@ class Vocabulary:
         self.max_length = max(len(self.tokenize(c)) for c in captions) + 2   # + <bos> and <eos>
 
     def encode(self, text):
-        """Convert a caption into max_length ids (<bos>, the tokens, <eos>, then <pad>).
+        """Convert a caption into ids (<bos>, the tokens, <eos>, then <pad> up to max_length).
 
         Args:
             text: caption or prompt; unknown words become <unk>.
 
         Returns:
-            List of max_length integers, the input of the text encoder.
+            List of integers, the input of the text encoder. It has max_length ids for every caption of the template,
+            while a text with more than max_length - 2 tokens gives one id per token plus <bos> and <eos>.
         """
         ids = [self.ids['<bos>']]
         ids += [self.ids.get(token, self.ids['<unk>']) for token in self.tokenize(text)]
