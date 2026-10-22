@@ -10,7 +10,6 @@ runs_100_longer/
 # Python
 __pycache__/
 *.pyc
-.pytest_cache/
 
 # Editor settings: personal, they stay on each computer
 .vscode/

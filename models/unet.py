@@ -92,7 +92,7 @@ class CrossAttention(nn.Module):
 
         # every pixel becomes a token, (B, C, H, W) -> (B, H*W, C)
         pixels = self.norm(x).flatten(2).transpose(1, 2)
-        attended, _ = self.attention(pixels, context, context, key_padding_mask=pad_mask)
+        attended = self.attention(pixels, context, context, key_padding_mask=pad_mask)
 
         # back to an image, added to the input (residual)
         return x + attended.transpose(1, 2).reshape(batch, channels, height, width)

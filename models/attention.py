@@ -46,7 +46,7 @@ class MultiHeadAttention(nn.Module):
             key_padding_mask: (B, L_k) bool, True where the token is <pad> (ignored); None = no mask.
 
         Returns:
-            (output (B, L_q, D), attention weights averaged over the heads (B, L_q, L_k)).
+            (B, L_q, D), one output vector per query.
         """
         batch, query_length, d_model = x_q.shape
         key_length = x_k.shape[1]
@@ -70,4 +70,4 @@ class MultiHeadAttention(nn.Module):
         # back to (B, L_q, D) with the heads side by side
         output = output.transpose(1, 2).reshape(batch, query_length, d_model)
 
-        return self.w_o(output), weights.mean(dim=1)
+        return self.w_o(output)

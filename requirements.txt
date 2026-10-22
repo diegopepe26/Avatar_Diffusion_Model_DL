@@ -2,7 +2,6 @@ gradio==6.28.0
 numpy==2.3.2
 pandas==2.3.1
 Pillow==11.3.0
-pytest
 torch==2.8.0
 torchmetrics[image]==1.9.0
 torchvision==0.23.0

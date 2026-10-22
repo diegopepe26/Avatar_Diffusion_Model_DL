@@ -35,7 +35,7 @@ class EncoderBlock(nn.Module):
         Returns:
             (B, L, D), where every vector now also carries information from the other tokens.
         """
-        attended, _ = self.attention(x, x, x, key_padding_mask=pad_mask)   # self-attention, q, k and v all from x
+        attended = self.attention(x, x, x, key_padding_mask=pad_mask)   # self-attention, q, k and v all from x
         x = self.norm1(x + self.dropout(attended))                # add & norm
 
         x = self.norm2(x + self.dropout(self.feed_forward(x)))    # add & norm
